@@ -1,0 +1,8 @@
+## Interface: 11506
+## Title: GTax
+## Notes: Tracks money earned and % guild tax suggestion since your last deposit.
+## Author: Trony
+## Version: 1.0.0
+## SavedVariables: GTaxDB
+
+GTax.lua
