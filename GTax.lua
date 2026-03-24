@@ -6,6 +6,7 @@ local playerNameLower = nil
 local characterKey = nil
 local guildBankIsOpen = false
 local pendingDeposit = false
+local pendingDepositTimer = nil
 local resetTracker
 local ui = {
     frame = nil,
@@ -584,10 +585,17 @@ local function onPlayerMoneyChanged()
     local delta = current - entry.lastKnownMoney
     if delta > 0 then
         entry.earnedSinceDeposit = entry.earnedSinceDeposit + delta
-    elseif delta < 0 and (pendingDeposit or guildBankIsOpen) then
-        local depositAmount = math.abs(delta)
-        pendingDeposit = false
-        resetTracker("guild bank deposit detected", nil, depositAmount)
+    elseif delta < 0 then
+        -- Only treat as a deposit if the guild bank is open and pendingDeposit is true
+        if pendingDeposit and guildBankIsOpen then
+            local depositAmount = math.abs(delta)
+            pendingDeposit = false
+            if pendingDepositTimer then
+                pendingDepositTimer = nil
+            end
+            resetTracker("guild bank deposit detected", nil, depositAmount)
+        end
+        -- Otherwise, ignore the gold loss (could be flight path, buyback, etc)
     end
 
     entry.lastKnownMoney = current
@@ -754,6 +762,16 @@ frame:SetScript("OnEvent", function(_, event, ...)
         if DepositGuildBankMoney then
             hooksecurefunc("DepositGuildBankMoney", function()
                 pendingDeposit = true
+                -- Set a timer to clear pendingDeposit after 2 seconds if no deposit occurs
+                if pendingDepositTimer and C_Timer and C_Timer.After and pendingDepositTimer.Cancel then
+                    pendingDepositTimer:Cancel()
+                end
+                if C_Timer and C_Timer.After then
+                    pendingDepositTimer = C_Timer.After(2, function()
+                        pendingDeposit = false
+                        pendingDepositTimer = nil
+                    end)
+                end
             end)
         end
 
