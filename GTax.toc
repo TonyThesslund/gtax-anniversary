@@ -5,4 +5,11 @@
 ## Version: 1.0.0
 ## SavedVariables: GTaxDB
 
-GTax.lua
+GTax_Core.lua
+GTax_DB.lua
+GTax_Logic.lua
+GTax_Events.lua
+GTax_Commands.lua
+GTax_UI_Main.lua
+GTax_UI_Options.lua
+GTax_MinimapButton.lua
