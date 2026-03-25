@@ -35,7 +35,7 @@ function GTax.UI.ToggleOptions()
         return
     end
     local opt = CreateFrame("Frame", "GTaxOptionsWindow", UIParent, "BackdropTemplate")
-    opt:SetSize(400, 400)
+    opt:SetSize(400, 550)
     opt:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     opt:SetMovable(true)
     opt:EnableMouse(true)
@@ -64,9 +64,67 @@ function GTax.UI.ToggleOptions()
     local earnedTitle = earnedBox:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     earnedTitle:SetPoint("TOPLEFT", earnedBox, "TOPLEFT", 0, 0)
     earnedTitle:SetText("Gold earned")
+
     createCheckbox(earnedBox, "Earned today", "earnedToday", -28)
     createCheckbox(earnedBox, "Earned this week", "earnedWeek", -54)
     createCheckbox(earnedBox, "Earned since last deposit", "earned", -80)
+
+    -- Gold earned reset buttons (stacked vertically)
+    local resetSinceLastBtn = CreateFrame("Button", nil, earnedBox, "UIPanelButtonTemplate")
+    resetSinceLastBtn:SetSize(140, 22)
+    resetSinceLastBtn:SetPoint("TOPLEFT", earnedBox, "TOPLEFT", 0, -110)
+    resetSinceLastBtn:SetText("Reset Since Last")
+    resetSinceLastBtn:SetScript("OnClick", function()
+        GTax.resetTracker("manual")
+        GTax.printMessage("'Earned since last deposit' reset.")
+    end)
+
+    local resetTodayBtn = CreateFrame("Button", nil, earnedBox, "UIPanelButtonTemplate")
+    resetTodayBtn:SetSize(140, 22)
+    resetTodayBtn:SetPoint("TOPLEFT", resetSinceLastBtn, "BOTTOMLEFT", 0, -4)
+    resetTodayBtn:SetText("Reset Today")
+    resetTodayBtn:SetScript("OnClick", function()
+        local entry = GTax.ensureDB()
+        if type(entry.earningsHistory) == "table" then
+            local now = time()
+            local d = date("*t", now)
+            local todayStart = time({ year = d.year, month = d.month, day = d.day, hour = 0, min = 0, sec = 0 })
+            local newHistory = {}
+            for _, record in ipairs(entry.earningsHistory) do
+                if (record.timestamp or 0) < todayStart then
+                    table.insert(newHistory, record)
+                end
+            end
+            entry.earningsHistory = newHistory
+        end
+        if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
+        GTax.printMessage("'Earned today' reset.")
+    end)
+
+    local resetWeekBtn = CreateFrame("Button", nil, earnedBox, "UIPanelButtonTemplate")
+    resetWeekBtn:SetSize(140, 22)
+    resetWeekBtn:SetPoint("TOPLEFT", resetTodayBtn, "BOTTOMLEFT", 0, -4)
+    resetWeekBtn:SetText("Reset This Week")
+    resetWeekBtn:SetScript("OnClick", function()
+        local entry = GTax.ensureDB()
+        if type(entry.earningsHistory) == "table" then
+            local now = time()
+            local d = date("*t", now)
+            local todayStart = time({ year = d.year, month = d.month, day = d.day, hour = 0, min = 0, sec = 0 })
+            local wday = d.wday -- 1=Sunday
+            local dayOffset = (wday == 1) and 6 or (wday - 2)
+            local weekStart = todayStart - (dayOffset * 86400)
+            local newHistory = {}
+            for _, record in ipairs(entry.earningsHistory) do
+                if (record.timestamp or 0) < weekStart then
+                    table.insert(newHistory, record)
+                end
+            end
+            entry.earningsHistory = newHistory
+        end
+        if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
+        GTax.printMessage("'Earned this week' reset.")
+    end)
 
     local depositBox = CreateFrame("Frame", nil, opt)
     depositBox:SetSize(180, 120)
@@ -74,19 +132,33 @@ function GTax.UI.ToggleOptions()
     local depositTitle = depositBox:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     depositTitle:SetPoint("TOPLEFT", depositBox, "TOPLEFT", 0, 0)
     depositTitle:SetText("Guild bank deposits")
+
     createCheckbox(depositBox, "Deposited today", "depositToday", -28)
     createCheckbox(depositBox, "Deposited this week", "depositWeek", -54)
     createCheckbox(depositBox, "Deposited total", "depositTotal", -80)
 
+    -- Purge button under Guild bank deposits
+    local purgeBtn = CreateFrame("Button", nil, depositBox, "UIPanelButtonTemplate")
+    purgeBtn:SetSize(140, 22)
+    purgeBtn:SetPoint("TOPLEFT", depositBox, "TOPLEFT", 0, -110)
+    purgeBtn:SetText("Purge History")
+    purgeBtn:SetScript("OnClick", function()
+        local entry = GTax.ensureDB()
+        entry.depositHistory = {}
+        entry.importedFingerprints = {}
+        GTax.UI.UpdateWindow()
+        GTax.printMessage("Deposit history purged.")
+    end)
+
     -- Suggested % section
     local suggestTitle = opt:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    suggestTitle:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -170)
+    suggestTitle:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -270)
     suggestTitle:SetText("Suggested deposit")
-    local cbSinceLast = createCheckbox(opt, "Suggest a deposit", "suggestedSinceLast", -196)
+    local cbSinceLast = createCheckbox(opt, "Suggest a deposit", "suggestedSinceLast", -296)
 
     -- Slider
     local sliderLabel = opt:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sliderLabel:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -280)
+    sliderLabel:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -380)
     sliderLabel:SetText("Tax %: " .. (GTax.ensureDB().taxPercent or 3))
     local slider = CreateFrame("Slider", "GTaxPercentSlider", opt, "OptionsSliderTemplate")
     slider:SetPoint("TOPLEFT", sliderLabel, "BOTTOMLEFT", 0, -8)
@@ -105,25 +177,9 @@ function GTax.UI.ToggleOptions()
         GTax.UI.UpdateWindow()
     end)
 
-    -- Reset/Purge buttons
-    local resetBtn = CreateFrame("Button", nil, opt, "UIPanelButtonTemplate")
-    resetBtn:SetSize(110, 24)
-    resetBtn:SetPoint("BOTTOMLEFT", opt, "BOTTOMLEFT", 12, 12)
-    resetBtn:SetText("Reset Tracker")
-    resetBtn:SetScript("OnClick", function()
-        GTax.resetTracker("manual")
-    end)
-    local purgeBtn = CreateFrame("Button", nil, opt, "UIPanelButtonTemplate")
-    purgeBtn:SetSize(110, 24)
-    purgeBtn:SetPoint("BOTTOMRIGHT", opt, "BOTTOMRIGHT", -12, 12)
-    purgeBtn:SetText("Purge History")
-    purgeBtn:SetScript("OnClick", function()
-        local entry = GTax.ensureDB()
-        entry.depositHistory = {}
-        entry.importedFingerprints = {}
-        GTax.UI.UpdateWindow()
-        GTax.printMessage("Deposit history purged.")
-    end)
+    -- Reset buttons
+    -- (no duplicate slider here)
+
     ui.optionsFrame = opt
     opt:Show()
 end

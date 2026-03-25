@@ -83,6 +83,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
         entry.lastResetAt = 0
     end
     entry.earnedSinceDeposit = 0
+    entry.earningsHistory = {} -- clear earnings for today/week
     if fingerprint then entry.lastDepositFingerprint = fingerprint end
     if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
     GTax.printMessage("Tracker reset" .. (reason and (" (" .. reason .. ")") or "") .. ".")
