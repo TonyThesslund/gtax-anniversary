@@ -72,23 +72,43 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
     local entry = GTax.ensureDB()
     local timeSince = GTax.formatTimeSinceDeposit(entry.lastResetAt)
     if depositAmount then
-        -- Guild bank deposit: only reset since last deposit
+        -- Guild bank deposit: only reset since last deposit, update lastResetAt and fingerprint
         GTax.recordDeposit(entry, depositAmount)
         if IsInGuild and IsInGuild() and SendChatMessage then
             local name = UnitName("player") or "Unknown"
-            local msg = "[GTax] " .. name .. " deposited " .. GTax.formatMoney(depositAmount) .. "! Their previous deposit was " .. timeSince .. "."
+            local suggested = 0
+            if GTax.getSuggestedDeposit then
+                local entry = GTax.ensureDB()
+                local money = entry.earnedSinceDeposit or 0
+                local pct = entry.taxPercent or 3
+                suggested = GTax.getSuggestedDeposit(money, pct)
+            end
+            local function fmt(money)
+                local g = math.floor(money / (100 * 100))
+                local s = math.floor((money / 100) % 100)
+                local c = money % 100
+                local parts = {}
+                if g > 0 then table.insert(parts, g .. "g") end
+                if s > 0 or g > 0 then table.insert(parts, s .. "s") end
+                table.insert(parts, c .. "c")
+                return table.concat(parts, " ")
+            end
+            local msg = string.format("[GTax] %s deposited %s (suggested: %s) — previous: %s ago",
+                name, fmt(depositAmount), fmt(suggested), timeSince)
             SendChatMessage(msg, "GUILD")
         end
         entry.lastResetAt = time()
         entry.earnedSinceDeposit = 0
+        if fingerprint then entry.lastDepositFingerprint = fingerprint end
         -- Do NOT clear earningsHistory (today/week)
-    else
-        -- Manual reset: clear all earnings
-        entry.lastResetAt = 0
+    elseif reason == "manual" then
+        -- Manual reset: clear all earnings, but do NOT update lastResetAt or fingerprint
         entry.earnedSinceDeposit = 0
         entry.earningsHistory = {} -- clear earnings for today/week
+    else
+        -- Other resets (e.g., today/week): just reset since last
+        entry.earnedSinceDeposit = 0
     end
-    if fingerprint then entry.lastDepositFingerprint = fingerprint end
     if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
     GTax.printMessage("Tracker reset" .. (reason and (" (" .. reason .. ")") or "") .. ".")
 end

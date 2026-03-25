@@ -107,12 +107,7 @@ function GTax.UI.UpdateWindow()
                 local spacing = (el.gap and prev ~= ui.title) and -14 or -8
                 el.text:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, spacing)
                 prev = el.text
-            else
-                -- empty row: just add spacing
-                local dummy = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-                dummy:SetText("")
-                dummy:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -14)
-                prev = dummy
+            -- else: skip empty row, do not add dummy spacing
             end
         end
     end
