@@ -76,9 +76,13 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
         GTax.recordDeposit(entry, depositAmount)
         if IsInGuild and IsInGuild() and SendChatMessage then
             local name = UnitName("player") or "Unknown"
+            local entry = GTax.ensureDB()
+            local showSuggested = true
+            if type(entry.show) == "table" and entry.show.suggestedSinceLast == false then
+                showSuggested = false
+            end
             local suggested = 0
-            if GTax.getSuggestedDeposit then
-                local entry = GTax.ensureDB()
+            if showSuggested and GTax.getSuggestedDeposit then
                 local money = entry.earnedSinceDeposit or 0
                 local pct = entry.taxPercent or 3
                 suggested = GTax.getSuggestedDeposit(money, pct)
@@ -93,8 +97,15 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 table.insert(parts, c .. "c")
                 return table.concat(parts, " ")
             end
-            local msg = string.format("[GTax] %s deposited %s (suggested: %s) — previous: %s ago",
-                name, fmt(depositAmount), fmt(suggested), timeSince)
+            local msg
+            if showSuggested then
+                local pct = entry.taxPercent or 3
+                msg = string.format("[GTax] %s deposited %s (suggested: %s at %d%%) — previous: %s ago",
+                    name, fmt(depositAmount), fmt(suggested), pct, timeSince)
+            else
+                msg = string.format("[GTax] %s deposited %s — previous: %s ago",
+                    name, fmt(depositAmount), timeSince)
+            end
             SendChatMessage(msg, "GUILD")
         end
         entry.lastResetAt = time()

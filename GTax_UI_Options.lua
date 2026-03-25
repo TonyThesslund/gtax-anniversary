@@ -35,7 +35,7 @@ function GTax.UI.ToggleOptions()
         return
     end
     local opt = CreateFrame("Frame", "GTaxOptionsWindow", UIParent, "BackdropTemplate")
-    opt:SetSize(400, 550)
+    opt:SetSize(400, 420)
     opt:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     opt:SetMovable(true)
     opt:EnableMouse(true)
@@ -72,7 +72,8 @@ function GTax.UI.ToggleOptions()
     -- Gold earned reset buttons (stacked vertically)
     local resetSinceLastBtn = CreateFrame("Button", nil, earnedBox, "UIPanelButtonTemplate")
     resetSinceLastBtn:SetSize(140, 22)
-    resetSinceLastBtn:SetPoint("TOPLEFT", earnedBox, "TOPLEFT", 0, -110)
+    -- Add a small gap (extra 8px) below checkboxes
+    resetSinceLastBtn:SetPoint("TOPLEFT", earnedBox, "TOPLEFT", 0, -118)
     resetSinceLastBtn:SetText("Reset Since Last")
     resetSinceLastBtn:SetScript("OnClick", function()
         GTax.resetTracker("manual")
@@ -140,7 +141,8 @@ function GTax.UI.ToggleOptions()
     -- Purge button under Guild bank deposits
     local purgeBtn = CreateFrame("Button", nil, depositBox, "UIPanelButtonTemplate")
     purgeBtn:SetSize(140, 22)
-    purgeBtn:SetPoint("TOPLEFT", depositBox, "TOPLEFT", 0, -110)
+    -- Add a small gap (extra 8px) below checkboxes
+    purgeBtn:SetPoint("TOPLEFT", depositBox, "TOPLEFT", 0, -118)
     purgeBtn:SetText("Purge History")
     purgeBtn:SetScript("OnClick", function()
         local entry = GTax.ensureDB()
@@ -156,13 +158,13 @@ function GTax.UI.ToggleOptions()
     suggestTitle:SetText("Suggested deposit")
     local cbSinceLast = createCheckbox(opt, "Suggest a deposit", "suggestedSinceLast", -296)
 
-    -- Slider
+    -- Slider (reduce gap below checkbox)
     local sliderLabel = opt:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sliderLabel:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -380)
+    sliderLabel:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -330)
     sliderLabel:SetText("Tax %: " .. (GTax.ensureDB().taxPercent or 3))
     local slider = CreateFrame("Slider", "GTaxPercentSlider", opt, "OptionsSliderTemplate")
     slider:SetPoint("TOPLEFT", sliderLabel, "BOTTOMLEFT", 0, -8)
-    slider:SetSize(220, 17)
+    slider:SetSize(220, 24)
     slider:SetMinMaxValues(1, 20)
     slider:SetValueStep(1)
     slider:SetObeyStepOnDrag(true)
@@ -176,6 +178,17 @@ function GTax.UI.ToggleOptions()
         sliderLabel:SetText("Tax %: " .. val)
         GTax.UI.UpdateWindow()
     end)
+
+    -- Manually add a track texture for the slider (robust for all WoW versions)
+    if slider.SetThumbTexture then
+        slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    end
+    if slider.track then slider.track:Hide() end -- Remove any previous
+    local track = slider:CreateTexture(nil, "BACKGROUND")
+    track:SetTexture("Interface\\Buttons\\UI-SliderBar-Background")
+    track:SetPoint("TOPLEFT", 6, -6)
+    track:SetPoint("BOTTOMRIGHT", -6, 6)
+    slider.track = track
 
     -- Reset buttons
     -- (no duplicate slider here)
