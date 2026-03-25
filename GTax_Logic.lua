@@ -72,6 +72,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
     local entry = GTax.ensureDB()
     local timeSince = GTax.formatTimeSinceDeposit(entry.lastResetAt)
     if depositAmount then
+        -- Guild bank deposit: only reset since last deposit
         GTax.recordDeposit(entry, depositAmount)
         if IsInGuild and IsInGuild() and SendChatMessage then
             local name = UnitName("player") or "Unknown"
@@ -79,11 +80,14 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
             SendChatMessage(msg, "GUILD")
         end
         entry.lastResetAt = time()
+        entry.earnedSinceDeposit = 0
+        -- Do NOT clear earningsHistory (today/week)
     else
+        -- Manual reset: clear all earnings
         entry.lastResetAt = 0
+        entry.earnedSinceDeposit = 0
+        entry.earningsHistory = {} -- clear earnings for today/week
     end
-    entry.earnedSinceDeposit = 0
-    entry.earningsHistory = {} -- clear earnings for today/week
     if fingerprint then entry.lastDepositFingerprint = fingerprint end
     if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
     GTax.printMessage("Tracker reset" .. (reason and (" (" .. reason .. ")") or "") .. ".")
