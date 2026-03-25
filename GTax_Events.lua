@@ -45,6 +45,9 @@ local function onPlayerMoneyChanged()
     local delta = current - entry.lastKnownMoney
     if delta > 0 then
         entry.earnedSinceDeposit = entry.earnedSinceDeposit + delta
+        -- Track earnings for today/week
+        if type(entry.earningsHistory) ~= "table" then entry.earningsHistory = {} end
+        table.insert(entry.earningsHistory, { amount = delta, timestamp = time() })
     elseif delta < 0 then
         if GTax.pendingDeposit and GTax.guildBankIsOpen then
             local depositAmount = math.abs(delta)

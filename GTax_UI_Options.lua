@@ -23,6 +23,7 @@ local function createCheckbox(parent, label, settingKey, yOffset)
     return cb
 end
 
+
 function GTax.UI.ToggleOptions()
     local ui = GTax.UI
     if ui.optionsFrame then
@@ -34,7 +35,7 @@ function GTax.UI.ToggleOptions()
         return
     end
     local opt = CreateFrame("Frame", "GTaxOptionsWindow", UIParent, "BackdropTemplate")
-    opt:SetSize(260, 340)
+    opt:SetSize(400, 400)
     opt:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     opt:SetMovable(true)
     opt:EnableMouse(true)
@@ -55,14 +56,37 @@ function GTax.UI.ToggleOptions()
     title:SetText("GTax - Options")
     local closeBtn = CreateFrame("Button", nil, opt, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", opt, "TOPRIGHT", -2, -2)
-    createCheckbox(opt, "Earned since last deposit", "earned", -34)
-    createCheckbox(opt, "Last deposit", "lastDeposit", -60)
-    createCheckbox(opt, "Suggested %", "suggested", -86)
-    createCheckbox(opt, "Deposited today", "depositToday", -112)
-    createCheckbox(opt, "Deposited this week", "depositWeek", -138)
-    createCheckbox(opt, "Deposited total", "depositTotal", -164)
+
+    -- Flex row: two columns for earned/guild bank
+    local earnedBox = CreateFrame("Frame", nil, opt)
+    earnedBox:SetSize(180, 120)
+    earnedBox:SetPoint("TOPLEFT", opt, "TOPLEFT", 12, -34)
+    local earnedTitle = earnedBox:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    earnedTitle:SetPoint("TOPLEFT", earnedBox, "TOPLEFT", 0, 0)
+    earnedTitle:SetText("Gold earned")
+    createCheckbox(earnedBox, "Earned today", "earnedToday", -28)
+    createCheckbox(earnedBox, "Earned this week", "earnedWeek", -54)
+    createCheckbox(earnedBox, "Earned since last deposit", "earned", -80)
+
+    local depositBox = CreateFrame("Frame", nil, opt)
+    depositBox:SetSize(180, 120)
+    depositBox:SetPoint("TOPRIGHT", opt, "TOPRIGHT", -12, -34)
+    local depositTitle = depositBox:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    depositTitle:SetPoint("TOPLEFT", depositBox, "TOPLEFT", 0, 0)
+    depositTitle:SetText("Guild bank deposits")
+    createCheckbox(depositBox, "Deposited today", "depositToday", -28)
+    createCheckbox(depositBox, "Deposited this week", "depositWeek", -54)
+    createCheckbox(depositBox, "Deposited total", "depositTotal", -80)
+
+    -- Suggested % section
+    local suggestTitle = opt:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    suggestTitle:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -170)
+    suggestTitle:SetText("Suggested deposit")
+    local cbSinceLast = createCheckbox(opt, "Suggest a deposit", "suggestedSinceLast", -196)
+
+    -- Slider
     local sliderLabel = opt:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sliderLabel:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -194)
+    sliderLabel:SetPoint("TOPLEFT", opt, "TOPLEFT", 14, -280)
     sliderLabel:SetText("Tax %: " .. (GTax.ensureDB().taxPercent or 3))
     local slider = CreateFrame("Slider", "GTaxPercentSlider", opt, "OptionsSliderTemplate")
     slider:SetPoint("TOPLEFT", sliderLabel, "BOTTOMLEFT", 0, -8)
@@ -80,6 +104,8 @@ function GTax.UI.ToggleOptions()
         sliderLabel:SetText("Tax %: " .. val)
         GTax.UI.UpdateWindow()
     end)
+
+    -- Reset/Purge buttons
     local resetBtn = CreateFrame("Button", nil, opt, "UIPanelButtonTemplate")
     resetBtn:SetSize(110, 24)
     resetBtn:SetPoint("BOTTOMLEFT", opt, "BOTTOMLEFT", 12, 12)

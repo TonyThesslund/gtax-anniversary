@@ -6,6 +6,8 @@ GTax = GTax or {}
 
 GTax.UI = GTax.UI or {}
 
+
+
 function GTax.UI.UpdateWindow()
     local ui = GTax.UI
     if not ui.frame then return end
@@ -15,21 +17,64 @@ function GTax.UI.UpdateWindow()
         for k, v in pairs(GTax.defaults.show) do entry.show[k] = v end
     end
     local showEarned = entry.show.earned ~= false
+    local showEarnedToday = entry.show.earnedToday == true
+    local showEarnedWeek = entry.show.earnedWeek == true
     local showLastDep = entry.show.lastDeposit ~= false
-    local showSuggested = entry.show.suggested ~= false
+    local showSuggestedSinceLast = entry.show.suggestedSinceLast ~= false
     local showToday = entry.show.depositToday ~= false
     local showWeek = entry.show.depositWeek ~= false
     local showTotal = entry.show.depositTotal ~= false
+
+    -- Calculate earned today/week
+    local now = time()
+    local d = date("*t", now)
+    local todayStart = time({ year = d.year, month = d.month, day = d.day, hour = 0, min = 0, sec = 0 })
+    local wday = d.wday -- 1=Sunday
+    local dayOffset = (wday == 1) and 6 or (wday - 2)
+    local weekStart = todayStart - (dayOffset * 86400)
+    local earnedToday, earnedWeek = 0, 0
+    if type(entry.earningsHistory) == "table" then
+        for _, record in ipairs(entry.earningsHistory) do
+            local amt = record.amount or 0
+            local ts = record.timestamp or 0
+            if ts >= weekStart then earnedWeek = earnedWeek + amt end
+            if ts >= todayStart then earnedToday = earnedToday + amt end
+        end
+    end
+
     ui.earnedText:SetText("Earned since last deposit: " .. GTax.formatMoney(entry.earnedSinceDeposit))
     ui.earnedText:SetShown(showEarned)
+
+    -- Earned today/week text
+    if not ui.earnedTodayText then
+        ui.earnedTodayText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        ui.earnedTodayText:SetJustifyH("LEFT")
+    end
+    ui.earnedTodayText:SetText("Earned today: " .. GTax.formatMoney(earnedToday))
+    ui.earnedTodayText:SetShown(showEarnedToday)
+
+    if not ui.earnedWeekText then
+        ui.earnedWeekText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        ui.earnedWeekText:SetJustifyH("LEFT")
+    end
+    ui.earnedWeekText:SetText("Earned this week: " .. GTax.formatMoney(earnedWeek))
+    ui.earnedWeekText:SetShown(showEarnedWeek)
+
     ui.lastDepositText:SetText("Last deposit: " .. GTax.formatTimeSinceDeposit(entry.lastResetAt))
     local r, g, b = GTax.getDepositColor(entry.lastResetAt)
     ui.lastDepositText:SetTextColor(r, g, b)
     ui.lastDepositText:SetShown(showLastDep)
     local pct = entry.taxPercent or 3
-    ui.suggestText:SetText("Suggested " .. pct .. "%: " .. GTax.formatMoney(GTax.getSuggestedDeposit(entry.earnedSinceDeposit, pct)))
-    ui.suggestText:SetShown(showSuggested)
+
+    -- Suggested %
     local today, week, total = GTax.getDepositSums(entry)
+    if showSuggestedSinceLast then
+        ui.suggestText:SetText("Suggested " .. pct .. "%: " .. GTax.formatMoney(GTax.getSuggestedDeposit(entry.earnedSinceDeposit, pct)))
+        ui.suggestText:Show()
+    else
+        ui.suggestText:Hide()
+    end
+
     ui.depositTodayText:SetText("Deposited today: " .. GTax.formatMoney(today))
     ui.depositTodayText:SetTextColor(today > 0 and 0 or 1, today > 0 and 1 or 0, 0)
     ui.depositTodayText:SetShown(showToday)
@@ -39,22 +84,36 @@ function GTax.UI.UpdateWindow()
     ui.depositTotalText:SetText("Deposited total: " .. GTax.formatMoney(total))
     ui.depositTotalText:SetTextColor(total > 0 and 0 or 1, total > 0 and 1 or 0, 0)
     ui.depositTotalText:SetShown(showTotal)
+
     -- Re-anchor visible elements
     local elements = {
         { text = ui.earnedText, visible = showEarned, gap = false },
-        { text = ui.lastDepositText, visible = showLastDep, gap = false },
-        { text = ui.suggestText, visible = showSuggested, gap = false },
-        { text = ui.depositTodayText, visible = showToday, gap = true },
+        { text = ui.earnedTodayText, visible = showEarnedToday, gap = false },
+        { text = ui.earnedWeekText, visible = showEarnedWeek, gap = false },
+        -- empty row
+        { text = nil, visible = true, gap = true },
+        { text = ui.depositTodayText, visible = showToday, gap = false },
         { text = ui.depositWeekText, visible = showWeek, gap = false },
         { text = ui.depositTotalText, visible = showTotal, gap = false },
+        -- empty row
+        { text = nil, visible = true, gap = true },
+        { text = ui.lastDepositText, visible = showLastDep, gap = false },
     }
     local prev = ui.title
     for _, el in ipairs(elements) do
         if el.visible then
-            el.text:ClearAllPoints()
-            local spacing = (el.gap and prev ~= ui.title) and -14 or -8
-            el.text:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, spacing)
-            prev = el.text
+            if el.text then
+                el.text:ClearAllPoints()
+                local spacing = (el.gap and prev ~= ui.title) and -14 or -8
+                el.text:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, spacing)
+                prev = el.text
+            else
+                -- empty row: just add spacing
+                local dummy = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                dummy:SetText("")
+                dummy:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -14)
+                prev = dummy
+            end
         end
     end
     -- Auto-resize window height
