@@ -15,7 +15,7 @@ GTax.defaults = {
     taxPercent = 3,
     minimapAngle = 220,
     showMinimap = true,
-    showWindow = true, -- NEW: remember window visibility
+    showWindow = true, -- Track if main window should be visible (default: visible)
     show = {
         earned = true,
         earnedToday = false,
@@ -23,8 +23,8 @@ GTax.defaults = {
         lastDeposit = true,
         suggestedSinceLast = true,
         depositToday = true,
-        depositWeek = true,
-        depositTotal = true,
+        depositWeek = false,
+        depositTotal = false,
     },
 }
 
@@ -43,6 +43,15 @@ function GTax.ensureDB()
     for k, v in pairs(GTax.defaults) do
         if entry[k] == nil then
             entry[k] = v
+        end
+    end
+    -- Ensure all show options are present and correct
+    if type(entry.show) ~= "table" then
+        entry.show = {}
+    end
+    for k, v in pairs(GTax.defaults.show) do
+        if entry.show[k] == nil then
+            entry.show[k] = v
         end
     end
     return entry

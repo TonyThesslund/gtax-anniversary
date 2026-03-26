@@ -93,7 +93,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         end
         if GTax.UI and GTax.UI.CreateWindow then GTax.UI.CreateWindow() end
         if GTax.MinimapButton and GTax.MinimapButton.Create then GTax.MinimapButton.Create() end
-        if GTax.UI and GTax.UI.frame then GTax.UI.frame:Show() end
+        -- Only show window if user had it open previously (handled by CreateWindow)
         return
     end
     if event == "ADDON_LOADED" then
