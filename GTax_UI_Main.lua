@@ -180,17 +180,27 @@ function GTax.UI.CreateWindow()
         end
     end)
     GTax.UI.UpdateWindow()
+    -- Show or hide based on saved setting
+    local entry = GTax.ensureDB()
+    if entry.showWindow == false then
+        win:Hide()
+    else
+        win:Show()
+    end
 end
 
 function GTax.UI.ToggleWindow()
     local ui = GTax.UI
+    local entry = GTax.ensureDB()
     if not ui.frame then GTax.UI.CreateWindow() end
     if ui.frame:IsShown() then
         ui.frame:Hide()
+        entry.showWindow = false
         GTax.printMessage("Window hidden.")
     else
         GTax.UI.UpdateWindow()
         ui.frame:Show()
+        entry.showWindow = true
         GTax.printMessage("Window shown.")
     end
 end

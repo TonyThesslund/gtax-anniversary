@@ -11,6 +11,16 @@ GTax.guildBankIsOpen = false
 local frame = CreateFrame("Frame")
 GTax.eventFrame = frame
 
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+        if GTax.UI and GTax.UI.CreateWindow then
+            GTax.UI.CreateWindow()
+        end
+    end
+end)
+
 local function scanGuildBankMoneyLog()
     if type(GetNumGuildBankMoneyTransactions) ~= "function" then return end
     if type(GetGuildBankMoneyTransaction) ~= "function" then return end

@@ -15,6 +15,7 @@ GTax.defaults = {
     taxPercent = 3,
     minimapAngle = 220,
     showMinimap = true,
+    showWindow = true, -- NEW: remember window visibility
     show = {
         earned = true,
         earnedToday = false,
