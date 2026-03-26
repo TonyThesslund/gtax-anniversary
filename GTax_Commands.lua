@@ -35,12 +35,22 @@ local function handleSlash(msg)
         local today, week, total = GTax.getDepositSums(entry)
         local lastDeposit = GTax.formatTimeSinceDeposit(entry.lastResetAt)
         local name = UnitName("player") or "Unknown"
+        local function fmt(money)
+            local g = math.floor(money / (100 * 100))
+            local s = math.floor((money / 100) % 100)
+            local c = money % 100
+            local parts = {}
+            if g > 0 then table.insert(parts, g .. "g") end
+            if s > 0 or g > 0 then table.insert(parts, s .. "s") end
+            table.insert(parts, c .. "c")
+            return table.concat(parts, " ")
+        end
         local messages = {
             "[GTax] " .. name,
             "Last deposit: " .. lastDeposit,
-            "Today: " .. GTax.formatMoney(today),
-            "Week: " .. GTax.formatMoney(week),
-            "Total: " .. GTax.formatMoney(total),
+            "Today: " .. fmt(today),
+            "Week: " .. fmt(week),
+            "Total: " .. fmt(total),
         }
         local function sendNext(i)
             if i > #messages then return end
