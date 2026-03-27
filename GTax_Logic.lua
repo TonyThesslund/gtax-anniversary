@@ -103,13 +103,27 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
             local msg
             if showSuggested then
                 local pct = entry.taxPercent or 3
-                msg = string.format("%s contributed %s (suggested: %s at %d%%) — previous: %s ago",
-                    name, fmt(depositAmount), fmt(suggested), pct, timeSince)
+                local indent = string.rep(" ", 11)
+                local lines = {
+                    string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                    indent .. "Amount: " .. fmt(depositAmount),
+                    indent .. "Suggested: " .. fmt(suggested) .. ", at " .. pct .. "%",
+                    indent .. "Previous contribution was " .. timeSince .. ".",
+                }
+                for i, line in ipairs(lines) do
+                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                end
             else
-                msg = string.format("%s contributed %s — previous: %s ago",
-                    name, fmt(depositAmount), timeSince)
+                local indent = string.rep(" ", 11)
+                local lines = {
+                    string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                    indent .. "Amount: " .. fmt(depositAmount),
+                    indent .. "Previous contribution was " .. timeSince .. ".",
+                }
+                for i, line in ipairs(lines) do
+                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                end
             end
-            C_ChatInfo.SendAddonMessage("GTax", msg, "GUILD")
             -- Do not print locally; handled by addon message handler
         end
         entry.lastResetAt = time()

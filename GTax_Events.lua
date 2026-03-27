@@ -25,7 +25,7 @@ local frame = CreateFrame("Frame")
     GTaxAddonMsgFrame:SetScript("OnEvent", function(_, event, ...)
         local prefix, message, channel, sender = ...
         if prefix == "GTax" and channel == "GUILD" then
-            print("|cff5fd7ffGTax|r", message)
+            print(message)
         end
     end)
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
