@@ -74,7 +74,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
     if depositAmount then
         -- Guild bank deposit: only reset since last deposit, update lastResetAt and fingerprint
         GTax.recordDeposit(entry, depositAmount)
-        if IsInGuild and IsInGuild() and SendChatMessage then
+        if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
             local name = UnitName("player") or "Unknown"
             local entry = GTax.ensureDB()
             local showSuggested = true
@@ -92,21 +92,39 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 local s = math.floor((money / 100) % 100)
                 local c = money % 100
                 local parts = {}
-                if g > 0 then table.insert(parts, g .. "g") end
-                if s > 0 or g > 0 then table.insert(parts, s .. "s") end
-                table.insert(parts, c .. "c")
+                local goldIcon = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t"
+                local silverIcon = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t"
+                local copperIcon = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
+                if g > 0 then table.insert(parts, g .. goldIcon) end
+                if s > 0 or g > 0 then table.insert(parts, s .. silverIcon) end
+                table.insert(parts, c .. copperIcon)
                 return table.concat(parts, " ")
             end
             local msg
             if showSuggested then
                 local pct = entry.taxPercent or 3
-                msg = string.format("[GTax] %s deposited %s (suggested: %s at %d%%) — previous: %s ago",
-                    name, fmt(depositAmount), fmt(suggested), pct, timeSince)
+                local indent = string.rep(" ", 11)
+                local lines = {
+                    string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                    indent .. "Amount: " .. fmt(depositAmount),
+                    indent .. "Suggested: " .. fmt(suggested) .. ", at " .. pct .. "%",
+                    indent .. "Previous contribution was " .. timeSince .. ".",
+                }
+                for i, line in ipairs(lines) do
+                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                end
             else
-                msg = string.format("[GTax] %s deposited %s — previous: %s ago",
-                    name, fmt(depositAmount), timeSince)
+                local indent = string.rep(" ", 11)
+                local lines = {
+                    string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                    indent .. "Amount: " .. fmt(depositAmount),
+                    indent .. "Previous contribution was " .. timeSince .. ".",
+                }
+                for i, line in ipairs(lines) do
+                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                end
             end
-            SendChatMessage(msg, "GUILD")
+            -- Do not print locally; handled by addon message handler
         end
         entry.lastResetAt = time()
         entry.earnedSinceDeposit = 0

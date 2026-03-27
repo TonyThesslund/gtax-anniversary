@@ -35,22 +35,40 @@ local function handleSlash(msg)
         local today, week, total = GTax.getDepositSums(entry)
         local lastDeposit = GTax.formatTimeSinceDeposit(entry.lastResetAt)
         local name = UnitName("player") or "Unknown"
+        local function fmt(money)
+            if type(money) ~= "number" or not money or money < 0 then money = 0 end
+            money = math.floor(money)
+            local g = math.floor(money / (100 * 100))
+            local s = math.floor((money / 100) % 100)
+            local c = money % 100
+            local parts = {}
+            local goldIcon = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t"
+            local silverIcon = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t"
+            local copperIcon = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
+            if g > 0 then table.insert(parts, g .. goldIcon) end
+            if s > 0 or g > 0 then table.insert(parts, s .. silverIcon) end
+            table.insert(parts, c .. copperIcon)
+            return table.concat(parts, " ")
+        end
+        -- Color the last deposit line
+        local r, g, b = GTax.getDepositColor(entry.lastResetAt)
+        local hex = string.format("%02x%02x%02x", math.floor(r*255), math.floor(g*255), math.floor(b*255))
+        local lastDepositColored = "|cff" .. hex .. "Last Contribution: " .. lastDeposit .. "|r"
+        local indent = string.rep(" ", 11)
         local messages = {
-            "[GTax] " .. name,
-            "Last deposit: " .. lastDeposit,
-            "Today: " .. GTax.formatMoney(today),
-            "Week: " .. GTax.formatMoney(week),
-            "Total: " .. GTax.formatMoney(total),
+            "|cff5fd7ff[GTax]|r Audit for " .. name,
+            indent .. lastDepositColored,
+            indent .. "Contributed today: " .. fmt(today),
+            indent .. "Contributed this week: " .. fmt(week),
+            indent .. "Contributed total: " .. fmt(total),
         }
         local function sendNext(i)
             if i > #messages then return end
-            SendChatMessage(messages[i], "GUILD")
+            if C_ChatInfo and C_ChatInfo.SendAddonMessage then
+                C_ChatInfo.SendAddonMessage("GTax", messages[i], "GUILD")
+            end
             if i < #messages then
-                if C_Timer and C_Timer.After then
-                    C_Timer.After(0.2, function() sendNext(i+1) end)
-                else
-                    sendNext(i+1)
-                end
+                sendNext(i+1)
             end
         end
         sendNext(1)
