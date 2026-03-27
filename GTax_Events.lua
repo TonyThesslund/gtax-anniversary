@@ -1,3 +1,10 @@
+local GTaxPrefixFrame = CreateFrame("Frame")
+GTaxPrefixFrame:RegisterEvent("ADDON_LOADED")
+GTaxPrefixFrame:SetScript("OnEvent", function(_, _, addon)
+    if addon == "GTax" and C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+        C_ChatInfo.RegisterAddonMessagePrefix("GTax")
+    end
+end)
 -- GTax_Events.lua
 -- Event frame, registration, handlers, hooks
 
@@ -9,15 +16,104 @@ GTax.pendingDepositTimer = nil
 GTax.guildBankIsOpen = false
 
 local frame = CreateFrame("Frame")
-GTax.eventFrame = frame
+-- print("GTax_Events.lua loaded")
+    print("GTax_Events.lua loaded")
 
-frame:RegisterEvent("PLAYER_LOGIN")
+    -- Dedicated frame for CHAT_MSG_ADDON to ensure reliable printing
+    local GTaxAddonMsgFrame = CreateFrame("Frame")
+    GTaxAddonMsgFrame:RegisterEvent("CHAT_MSG_ADDON")
+    GTaxAddonMsgFrame:SetScript("OnEvent", function(_, event, ...)
+        local prefix, message, channel, sender = ...
+        if prefix == "GTax" and channel == "GUILD" then
+            print("|cff5fd7ffGTax|r", message)
+        end
+    end)
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("CHAT_MSG_ADDON")
+frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("PLAYER_MONEY")
+frame:RegisterEvent("GUILDBANKFRAME_OPENED")
+frame:RegisterEvent("GUILDBANKFRAME_CLOSED")
+frame:RegisterEvent("GUILDBANK_UPDATE_MONEY")
+frame:RegisterEvent("GUILDBANKLOG_UPDATE")
+
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
-        if GTax.UI and GTax.UI.CreateWindow then
-            GTax.UI.CreateWindow()
+        local entry = GTax.ensureDB()
+        GTax.playerNameLower = string.lower(UnitName("player") or "")
+        if type(entry.lastKnownMoney) ~= "number" then
+            entry.lastKnownMoney = GetMoney() or 0
         end
+        if DepositGuildBankMoney then
+            hooksecurefunc("DepositGuildBankMoney", function()
+                GTax.pendingDeposit = true
+                if GTax.pendingDepositTimer and C_Timer and C_Timer.After and GTax.pendingDepositTimer.Cancel then
+                    GTax.pendingDepositTimer:Cancel()
+                end
+                if C_Timer and C_Timer.After then
+                    GTax.pendingDepositTimer = C_Timer.After(2, function()
+                        GTax.pendingDeposit = false
+                        GTax.pendingDepositTimer = nil
+                    end)
+                end
+            end)
+        end
+        if GTax.UI and GTax.UI.CreateWindow then GTax.UI.CreateWindow() end
+        if GTax.MinimapButton and GTax.MinimapButton.Create then GTax.MinimapButton.Create() end
+        return
+    end
+    if event == "CHAT_MSG_ADDON" then
+        local prefix, message, channel, sender = ...
+        -- (CHAT_MSG_ADDON now handled by dedicated frame above)
+    end
+    if event == "ADDON_LOADED" then
+        local addon = select(1, ...)
+        GTax.printMessage("ADDON_LOADED event for: '" .. tostring(addon) .. "'")
+        if addon == "GTax" and C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+            local ok = C_ChatInfo.RegisterAddonMessagePrefix("GTax")
+            GTax.printMessage("Tried to register prefix 'GTax', result: " .. tostring(ok))
+        end
+        if addon == "Blizzard_GuildBankUI" and not GTax.uiGuildBankHooked then
+            GTax.uiGuildBankHooked = true
+            if GuildBankFrame then
+                GuildBankFrame:HookScript("OnShow", function()
+                    GTax.guildBankIsOpen = true
+                    local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
+                    if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+                    scanGuildBankMoneyLog()
+                end)
+                GuildBankFrame:HookScript("OnHide", function()
+                    GTax.guildBankIsOpen = false
+                end)
+            end
+        end
+        return
+    end
+    if event == "PLAYER_MONEY" then
+        onPlayerMoneyChanged()
+        return
+    end
+    if event == "GUILDBANKFRAME_OPENED" then
+        GTax.guildBankIsOpen = true
+        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
+        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+        scanGuildBankMoneyLog()
+        return
+    end
+    if event == "GUILDBANKFRAME_CLOSED" then
+        GTax.guildBankIsOpen = false
+        if GTax.UI and GTax.UI.depositPrompt then GTax.UI.depositPrompt:Hide() end
+        return
+    end
+    if event == "GUILDBANK_UPDATE_MONEY" then
+        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
+        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+        scanGuildBankMoneyLog()
+        return
+    end
+    if event == "GUILDBANKLOG_UPDATE" then
+        scanGuildBankMoneyLog()
+        return
     end
 end)
 
