@@ -127,9 +127,14 @@ local function onPlayerMoneyChanged()
             -- Broadcast the withdrawal
             if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
                 local name = UnitName("player") or "Unknown"
-                C_ChatInfo.SendAddonMessage("GTax", 
-                    string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r withdrew |cffff6b6b%s|r from guild bank.", name, GTax.formatMoney(delta)), 
-                    "GUILD")
+                local indent = string.rep(" ", 11)
+                local lines = {
+                    string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r withdrew |cffff6b6b%s|r from guild bank.", name, GTax.formatMoney(delta)),
+                    indent .. "Total loans: " .. GTax.formatMoney(entry.unpaidLoans),
+                }
+                for i, line in ipairs(lines) do
+                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                end
             end
         else
             -- Regular earned gold
