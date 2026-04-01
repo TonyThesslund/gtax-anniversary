@@ -6,7 +6,7 @@ GTax = GTax or {}
 
 GTax.UI = GTax.UI or {}
 
-local LEADERBOARD_ROWS = 20
+local LEADERBOARD_ROWS = 15
 local LB_PLAYER_X = 0
 local LB_TOTAL_X = 95
 local LB_TODAY_X = 240
@@ -36,15 +36,6 @@ local function createSectionTitle(parent, text, point, relativeTo, relativePoint
     title:SetPoint(point, relativeTo, relativePoint, x, y)
     title:SetText(text)
     return title
-end
-
-local function createActionButton(parent, text, width, height, point, relativeTo, relativePoint, x, y, onClick)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    button:SetSize(width, height)
-    button:SetPoint(point, relativeTo, relativePoint, x, y)
-    button:SetText(text)
-    button:SetScript("OnClick", onClick)
-    return button
 end
 
 local function createLeaderboardCell(parent, template, point, relativeTo, relativePoint, x, y)
@@ -256,7 +247,7 @@ function GTax.UI.ToggleOptions()
         return
     end
     local opt = CreateFrame("Frame", "GTaxOptionsWindow", UIParent, "BasicFrameTemplateWithInset")
-    opt:SetSize(1050, 540)
+    opt:SetSize(1010, 430)
     opt:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     opt:SetMovable(true)
     opt:EnableMouse(true)
@@ -277,51 +268,27 @@ function GTax.UI.ToggleOptions()
     end
 
     -- Flex row: two columns for earned/guild bank
+    createSectionTitle(opt, "Options", "TOPLEFT", opt, "TOPLEFT", 12, -34)
+
     local earnedBox = CreateFrame("Frame", nil, opt)
     earnedBox:SetSize(170, 110)
-    earnedBox:SetPoint("TOPLEFT", opt, "TOPLEFT", 12, -34)
+    earnedBox:SetPoint("TOPLEFT", opt, "TOPLEFT", 12, -58)
     createSectionTitle(earnedBox, "Earned gold", "TOPLEFT", earnedBox, "TOPLEFT", 0, 0)
 
     createCheckbox(earnedBox, "Earned today", "earnedToday", -28)
     createCheckbox(earnedBox, "Earned this week", "earnedWeek", -54)
     createCheckbox(earnedBox, "Earned since last contribution", "earned", -80)
 
-    local resetSinceLastBtn = createActionButton(earnedBox, "Reset Since Last", 132, 20, "TOPLEFT", earnedBox, "TOPLEFT", 0, -112, function()
-        GTax.resetTracker("manual")
-        GTax.printMessage("Earned gold since the last contribution was reset.")
-    end)
-
-    local resetTodayBtn = createActionButton(earnedBox, "Reset Today", 132, 20, "TOPLEFT", resetSinceLastBtn, "BOTTOMLEFT", 0, -3, function()
-        local entry = GTax.ensureDB()
-        GTax.clearEarningsSince(entry, GTax.getStartOfDay())
-        if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
-        GTax.printMessage("Today's earned gold was reset.")
-    end)
-
-    local resetWeekBtn = createActionButton(earnedBox, "Reset This Week", 132, 20, "TOPLEFT", resetTodayBtn, "BOTTOMLEFT", 0, -3, function()
-        local entry = GTax.ensureDB()
-        GTax.clearEarningsSince(entry, GTax.getStartOfWeek())
-        if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
-        GTax.printMessage("This week's earned gold was reset.")
-    end)
-
     local depositBox = CreateFrame("Frame", nil, opt)
     depositBox:SetSize(170, 110)
-    depositBox:SetPoint("TOPLEFT", resetWeekBtn, "BOTTOMLEFT", 0, LEFT_SECTION_GAP)
+    depositBox:SetPoint("TOPLEFT", earnedBox, "BOTTOMLEFT", 0, LEFT_SECTION_GAP)
     createSectionTitle(depositBox, "Guild bank contributions", "TOPLEFT", depositBox, "TOPLEFT", 0, 0)
 
     createCheckbox(depositBox, "Contributed today", "depositToday", -28)
     createCheckbox(depositBox, "Contributed this week", "depositWeek", -54)
     createCheckbox(depositBox, "Contributed total", "depositTotal", -80)
 
-    local purgeBtn = createActionButton(depositBox, "Purge History", 132, 20, "TOPLEFT", depositBox, "TOPLEFT", 0, -112, function()
-        local entry = GTax.ensureDB()
-        entry.depositHistory = {}
-        GTax.UI.UpdateWindow()
-        GTax.printMessage("Contribution history purged.")
-    end)
-
-    local suggestTitle = createSectionTitle(opt, "Suggested contribution", "TOPLEFT", purgeBtn, "BOTTOMLEFT", 0, LEFT_SECTION_GAP)
+    local suggestTitle = createSectionTitle(opt, "Suggested contribution", "TOPLEFT", depositBox, "BOTTOMLEFT", 0, LEFT_SECTION_GAP)
 
     local suggestBox = CreateFrame("Frame", nil, opt)
     suggestBox:SetSize(220, 30)
@@ -362,10 +329,10 @@ function GTax.UI.ToggleOptions()
     local divider = opt:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(0.35, 0.35, 0.35, 0.85)
     divider:SetWidth(2)
-    divider:SetPoint("TOPLEFT", opt, "TOPLEFT", 248, -34)
-    divider:SetPoint("BOTTOMLEFT", opt, "BOTTOMLEFT", 248, 30)
+    divider:SetPoint("TOPLEFT", opt, "TOPLEFT", 220, -34)
+    divider:SetPoint("BOTTOMLEFT", opt, "BOTTOMLEFT", 220, 30)
 
-    local leaderboardTitle = createSectionTitle(opt, getGuildLeaderboardTitle(), "TOPLEFT", opt, "TOPLEFT", 270, -34)
+    local leaderboardTitle = createSectionTitle(opt, getGuildLeaderboardTitle(), "TOPLEFT", opt, "TOPLEFT", 238, -34)
     ui.leaderboardTitle = leaderboardTitle
     local headers = {
         createSortableLeaderboardHeader(opt, "Player", "player", 100, "TOPLEFT", leaderboardTitle, "BOTTOMLEFT", LB_PLAYER_X, -14),

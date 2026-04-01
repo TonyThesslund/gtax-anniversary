@@ -35,9 +35,20 @@ function GTax.updateLeaderboardEntry(player, total, today, week, lastContributio
     local entry = GTax.ensureDB()
     if type(entry.leaderboardCache) ~= "table" then entry.leaderboardCache = {} end
     local key = normalizePlayerName(player)
+    local newTotal = parseNumber(total)
+
+    -- Don't overwrite a remote entry with a lower total.
+    -- This protects cached history when a guildmate's SavedVariables reset (reinstall, corrupt WTF).
+    -- We skip the guard for the local player since we always trust our own live data.
+    local localKey = normalizePlayerName(UnitName("player") or "")
+    if key ~= localKey then
+        local existing = entry.leaderboardCache[key]
+        if existing and newTotal < existing.total then return end
+    end
+
     entry.leaderboardCache[key] = {
         player = key,
-        total = parseNumber(total),
+        total = newTotal,
         today = parseNumber(today),
         week = parseNumber(week),
         lastContributionAt = parseNumber(lastContributionAt),
@@ -314,13 +325,17 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
             end
         end
         
-        -- Record contribution for history (if there's any contribution amount)
-        if contributionAmount > 0 then
+        local hasContribution = (depositAmount > loanPayment)
+
+        -- Record contribution for history (only when deposit exceeds loan payoff)
+        if hasContribution then
             GTax.recordDeposit(entry, contributionAmount)
         end
         
-        entry.lastResetAt = time()
-        entry.earnedSinceDeposit = 0
+        if hasContribution then
+            entry.lastResetAt = time()
+            entry.earnedSinceDeposit = 0
+        end
         if fingerprint then entry.lastDepositFingerprint = fingerprint end
         if GTax.sendLeaderboardData then GTax.sendLeaderboardData() end
         -- Do NOT clear earningsHistory (today/week)

@@ -10,6 +10,7 @@ GTax.pendingDepositAmount = nil
 GTax.pendingWithdrawal = false
 GTax.pendingWithdrawalTimer = nil
 GTax.pendingWithdrawalAmount = nil
+GTax.pendingWithdrawalExpiresAt = nil
 GTax.guildBankIsOpen = false
 
 local function normalizePlayerName(name)
@@ -56,17 +57,19 @@ local function startPendingWithdrawalTimer()
 
     if not C_Timer then return end
     if C_Timer.NewTimer then
-        GTax.pendingWithdrawalTimer = C_Timer.NewTimer(2, function()
+        GTax.pendingWithdrawalTimer = C_Timer.NewTimer(10, function()
             GTax.pendingWithdrawal = false
             GTax.pendingWithdrawalAmount = nil
+            GTax.pendingWithdrawalExpiresAt = nil
             GTax.pendingWithdrawalTimer = nil
         end)
         return
     end
     if C_Timer.After then
-        C_Timer.After(2, function()
+        C_Timer.After(10, function()
             GTax.pendingWithdrawal = false
             GTax.pendingWithdrawalAmount = nil
+            GTax.pendingWithdrawalExpiresAt = nil
             GTax.pendingWithdrawalTimer = nil
         end)
     end
@@ -178,18 +181,26 @@ local function scanGuildBankMoneyLog()
         entry.lastDepositFingerprint = newestDepositFingerprint
     end
 
-    if newestWithdrawalFingerprint and newestWithdrawalFingerprint ~= entry.lastWithdrawalFingerprint then
-        if GTax.pendingWithdrawal then
+    if newestWithdrawalFingerprint then
+        local isNewWithdrawalFingerprint = (newestWithdrawalFingerprint ~= entry.lastWithdrawalFingerprint)
+        local hasPendingWithdrawal = (type(GTax.pendingWithdrawalAmount) == "number" and GTax.pendingWithdrawalAmount > 0)
+            and (type(GTax.pendingWithdrawalExpiresAt) ~= "number" or time() <= GTax.pendingWithdrawalExpiresAt)
+        local pendingMatchesLogAmount = hasPendingWithdrawal
+            and type(newestWithdrawalAmount) == "number"
+            and math.abs((GTax.pendingWithdrawalAmount or 0) - newestWithdrawalAmount) <= 1
+
+        if GTax.pendingWithdrawal or (hasPendingWithdrawal and (isNewWithdrawalFingerprint or pendingMatchesLogAmount)) then
             GTax.pendingWithdrawal = false
             local withdrawalAmount = GTax.pendingWithdrawalAmount or newestWithdrawalAmount
             GTax.pendingWithdrawalAmount = nil
+            GTax.pendingWithdrawalExpiresAt = nil
             if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
                 GTax.pendingWithdrawalTimer:Cancel()
             end
             GTax.pendingWithdrawalTimer = nil
             entry.lastWithdrawalFingerprint = newestWithdrawalFingerprint
             applyConfirmedWithdrawal(entry, withdrawalAmount)
-        else
+        elseif isNewWithdrawalFingerprint then
             -- No pending local withdrawal action: treat as historical baseline only.
             entry.lastWithdrawalFingerprint = newestWithdrawalFingerprint
         end
@@ -207,12 +218,29 @@ local function onPlayerMoneyChanged()
     end
 
     local delta = current - entry.lastKnownMoney
+
+    -- Guard against stale guild-bank state causing normal earnings (e.g., vendor sales) to be ignored.
+    if GTax.guildBankIsOpen and GuildBankFrame and GuildBankFrame.IsShown and not GuildBankFrame:IsShown() then
+        GTax.guildBankIsOpen = false
+        GTax.pendingWithdrawal = false
+        GTax.pendingWithdrawalAmount = nil
+        GTax.pendingWithdrawalExpiresAt = nil
+        if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
+            GTax.pendingWithdrawalTimer:Cancel()
+        end
+        GTax.pendingWithdrawalTimer = nil
+    end
+
+    local merchantOpen = (MerchantFrame and MerchantFrame.IsShown and MerchantFrame:IsShown()) and true or false
+    local inGuildBankContext = GTax.guildBankIsOpen and not merchantOpen
+
     if delta > 0 then
         -- Money gained: could be earnings or guild bank withdrawal
-        if GTax.guildBankIsOpen then
+        if inGuildBankContext then
             -- Potential withdrawal from guild bank; confirm via bank money log before counting as loan.
             GTax.pendingWithdrawal = true
             GTax.pendingWithdrawalAmount = math.floor(delta)
+            GTax.pendingWithdrawalExpiresAt = time() + 10
             startPendingWithdrawalTimer()
             local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
             if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
@@ -252,6 +280,7 @@ local function hookGuildBankFrame()
         GTax.guildBankIsOpen = false
         GTax.pendingWithdrawal = false
         GTax.pendingWithdrawalAmount = nil
+        GTax.pendingWithdrawalExpiresAt = nil
         if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
             GTax.pendingWithdrawalTimer:Cancel()
         end
@@ -271,10 +300,11 @@ local function initializeAddon()
     if GTax.UI and GTax.UI.CreateWindow then GTax.UI.CreateWindow() end
     if GTax.MinimapButton and GTax.MinimapButton.Create then GTax.MinimapButton.Create() end
 
-    -- Ask guild clients to publish their latest leaderboard data after login/reload.
-    if C_Timer and C_Timer.After and GTax.sendLeaderboardRequest then
+    -- Publish our own snapshot on login/reload, then request others.
+    if C_Timer and C_Timer.After then
         C_Timer.After(2, function()
-            GTax.sendLeaderboardRequest()
+            if GTax.sendLeaderboardData then GTax.sendLeaderboardData() end
+            if GTax.sendLeaderboardRequest then GTax.sendLeaderboardRequest() end
         end)
     end
 end

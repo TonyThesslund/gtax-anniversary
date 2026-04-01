@@ -44,7 +44,12 @@ function GTax.ensureDB()
     local entry = GTaxDB.characters[characterKey]
     for k, v in pairs(GTax.defaults) do
         if entry[k] == nil then
-            entry[k] = v
+            -- Always assign a fresh table copy to avoid aliasing the shared defaults reference
+            if type(v) == "table" then
+                entry[k] = {}
+            else
+                entry[k] = v
+            end
         end
     end
     -- Ensure all show options are present and correct
