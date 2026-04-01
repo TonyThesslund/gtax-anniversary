@@ -18,13 +18,6 @@ local function handleSlash(msg)
         GTax.resetTracker("manual")
         return
     end
-    if command == "purge" then
-        local entry = GTax.ensureDB()
-        entry.depositHistory = {}
-        if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
-        GTax.printMessage("Contribution history purged.")
-        return
-    end
     if command == "audit" then
         if not (IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage) then
             GTax.printMessage("You are not in a guild.")
@@ -57,7 +50,7 @@ local function handleSlash(msg)
         return
     end
     if command == "help" then
-        GTax.printMessage("Commands: /gtax, /gtax options, /gtax reset, /gtax purge, /gtax audit, /gtax help")
+        GTax.printMessage("Commands: /gtax, /gtax options, /gtax reset, /gtax audit, /gtax help")
         return
     end
     GTax.printMessage("Unknown command. Use /gtax help.")
