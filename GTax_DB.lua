@@ -10,6 +10,7 @@ GTax.defaults = {
     lastKnownMoney = nil,
     lastResetAt = 0,
     lastDepositFingerprint = nil,
+    lastWithdrawalFingerprint = nil,
     depositHistory = {},
     unpaidLoans = 0,
     leaderboardCache = {}, -- Persisted guild leaderboard data from other players

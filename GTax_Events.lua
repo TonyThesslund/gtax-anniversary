@@ -7,6 +7,9 @@ GTax = GTax or {}
 GTax.pendingDeposit = false
 GTax.pendingDepositTimer = nil
 GTax.pendingDepositAmount = nil
+GTax.pendingWithdrawal = false
+GTax.pendingWithdrawalTimer = nil
+GTax.pendingWithdrawalAmount = nil
 GTax.guildBankIsOpen = false
 
 local function normalizePlayerName(name)
@@ -45,6 +48,30 @@ local function startPendingDepositTimer()
     end
 end
 
+local function startPendingWithdrawalTimer()
+    if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
+        GTax.pendingWithdrawalTimer:Cancel()
+    end
+    GTax.pendingWithdrawalTimer = nil
+
+    if not C_Timer then return end
+    if C_Timer.NewTimer then
+        GTax.pendingWithdrawalTimer = C_Timer.NewTimer(2, function()
+            GTax.pendingWithdrawal = false
+            GTax.pendingWithdrawalAmount = nil
+            GTax.pendingWithdrawalTimer = nil
+        end)
+        return
+    end
+    if C_Timer.After then
+        C_Timer.After(2, function()
+            GTax.pendingWithdrawal = false
+            GTax.pendingWithdrawalAmount = nil
+            GTax.pendingWithdrawalTimer = nil
+        end)
+    end
+end
+
 local function flagPendingDeposit(amount)
     GTax.pendingDeposit = true
     local parsedAmount = tonumber(amount)
@@ -63,6 +90,35 @@ local function isLikelyDeposit(txType, who, amount)
     return normalizePlayerName(who) == normalizePlayerName(UnitName("player"))
 end
 
+local function isLikelyWithdrawal(txType, who, amount)
+    if txType ~= "withdraw" or type(amount) ~= "number" or amount <= 0 then
+        return false
+    end
+    return normalizePlayerName(who) == normalizePlayerName(UnitName("player"))
+end
+
+local function applyConfirmedWithdrawal(entry, amount)
+    if type(amount) ~= "number" or amount <= 0 then return end
+    if type(entry.unpaidLoans) ~= "number" then entry.unpaidLoans = 0 end
+
+    entry.unpaidLoans = entry.unpaidLoans + amount
+
+    if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
+        local name = UnitName("player") or "Unknown"
+        local indent = string.rep(" ", 11)
+        local lines = {
+            string.format("|cff5fd7ff[GTax]|r |cffffa500%s|r withdrew %s from guild bank.", name, GTax.formatMoney(amount)),
+            indent .. "|cffffa500Total loans:|r " .. GTax.formatMoney(entry.unpaidLoans),
+        }
+        for i, line in ipairs(lines) do
+            C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+        end
+    end
+
+    if GTax.sendLeaderboardData then GTax.sendLeaderboardData() end
+    if GTax.UI and GTax.UI.UpdateLeaderboard then GTax.UI.UpdateLeaderboard() end
+end
+
 local function scanGuildBankMoneyLog()
     if type(GetNumGuildBankMoneyTransactions) ~= "function" then return end
     if type(GetGuildBankMoneyTransaction) ~= "function" then return end
@@ -73,9 +129,11 @@ local function scanGuildBankMoneyLog()
 
     local newestDepositFingerprint
     local newestDepositAmount
+    local newestWithdrawalFingerprint
+    local newestWithdrawalAmount
     for i = 1, num do
         local txType, who, amount, years, months, days, hours = GetGuildBankMoneyTransaction(i)
-        if isLikelyDeposit(txType, who, amount) then
+        if not newestDepositFingerprint and isLikelyDeposit(txType, who, amount) then
             newestDepositFingerprint = table.concat({
                 tostring(txType),
                 tostring(who),
@@ -86,6 +144,20 @@ local function scanGuildBankMoneyLog()
                 tostring(hours),
             }, "|")
             newestDepositAmount = amount
+        end
+        if not newestWithdrawalFingerprint and isLikelyWithdrawal(txType, who, amount) then
+            newestWithdrawalFingerprint = table.concat({
+                tostring(txType),
+                tostring(who),
+                tostring(amount),
+                tostring(years),
+                tostring(months),
+                tostring(days),
+                tostring(hours),
+            }, "|")
+            newestWithdrawalAmount = amount
+        end
+        if newestDepositFingerprint and newestWithdrawalFingerprint then
             break
         end
     end
@@ -106,6 +178,23 @@ local function scanGuildBankMoneyLog()
         entry.lastDepositFingerprint = newestDepositFingerprint
     end
 
+    if newestWithdrawalFingerprint and newestWithdrawalFingerprint ~= entry.lastWithdrawalFingerprint then
+        if GTax.pendingWithdrawal then
+            GTax.pendingWithdrawal = false
+            local withdrawalAmount = GTax.pendingWithdrawalAmount or newestWithdrawalAmount
+            GTax.pendingWithdrawalAmount = nil
+            if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
+                GTax.pendingWithdrawalTimer:Cancel()
+            end
+            GTax.pendingWithdrawalTimer = nil
+            entry.lastWithdrawalFingerprint = newestWithdrawalFingerprint
+            applyConfirmedWithdrawal(entry, withdrawalAmount)
+        else
+            -- No pending local withdrawal action: treat as historical baseline only.
+            entry.lastWithdrawalFingerprint = newestWithdrawalFingerprint
+        end
+    end
+
     if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
 end
 
@@ -121,21 +210,13 @@ local function onPlayerMoneyChanged()
     if delta > 0 then
         -- Money gained: could be earnings or guild bank withdrawal
         if GTax.guildBankIsOpen then
-            -- Likely withdrawal from guild bank
-            if type(entry.unpaidLoans) ~= "number" then entry.unpaidLoans = 0 end
-            entry.unpaidLoans = entry.unpaidLoans + delta
-            -- Broadcast the withdrawal
-            if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
-                local name = UnitName("player") or "Unknown"
-                local indent = string.rep(" ", 11)
-                local lines = {
-                    string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r withdrew %s from guild bank.", name, GTax.formatMoney(delta)),
-                    indent .. "Total loans: " .. GTax.formatMoney(entry.unpaidLoans),
-                }
-                for i, line in ipairs(lines) do
-                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
-                end
-            end
+            -- Potential withdrawal from guild bank; confirm via bank money log before counting as loan.
+            GTax.pendingWithdrawal = true
+            GTax.pendingWithdrawalAmount = math.floor(delta)
+            startPendingWithdrawalTimer()
+            local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
+            if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+            scanGuildBankMoneyLog()
         else
             -- Regular earned gold
             entry.earnedSinceDeposit = entry.earnedSinceDeposit + delta
@@ -169,6 +250,12 @@ local function hookGuildBankFrame()
     end)
     GuildBankFrame:HookScript("OnHide", function()
         GTax.guildBankIsOpen = false
+        GTax.pendingWithdrawal = false
+        GTax.pendingWithdrawalAmount = nil
+        if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
+            GTax.pendingWithdrawalTimer:Cancel()
+        end
+        GTax.pendingWithdrawalTimer = nil
     end)
 end
 
