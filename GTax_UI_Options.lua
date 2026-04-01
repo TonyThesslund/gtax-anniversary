@@ -8,16 +8,16 @@ GTax.UI = GTax.UI or {}
 
 local LEADERBOARD_ROWS = 20
 local LB_PLAYER_X = 0
-local LB_TOTAL_X = 112
-local LB_TODAY_X = 272
-local LB_WEEK_X = 432
-local LB_LAST_X = 600
-local LB_LOANS_X = 765
-local LB_PLAYER_W = 100
-local LB_TOTAL_W = 150
-local LB_TODAY_W = 150
-local LB_WEEK_W = 155
-local LB_LAST_W = 155
+local LB_TOTAL_X = 95
+local LB_TODAY_X = 240
+local LB_WEEK_X = 375
+local LB_LAST_X = 520
+local LB_LOANS_X = 655
+local LB_PLAYER_W = 90
+local LB_TOTAL_W = 140
+local LB_TODAY_W = 130
+local LB_WEEK_W = 140
+local LB_LAST_W = 130
 local LB_LOANS_W = 90
 local LB_ROW_H = 20
 local LB_ROW_W = LB_LOANS_X + LB_LOANS_W - 8
@@ -256,7 +256,7 @@ function GTax.UI.ToggleOptions()
         return
     end
     local opt = CreateFrame("Frame", "GTaxOptionsWindow", UIParent, "BasicFrameTemplateWithInset")
-    opt:SetSize(950, 540)
+    opt:SetSize(1050, 540)
     opt:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     opt:SetMovable(true)
     opt:EnableMouse(true)
