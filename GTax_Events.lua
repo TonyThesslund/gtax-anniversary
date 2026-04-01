@@ -7,6 +7,10 @@ GTax = GTax or {}
 GTax.pendingDeposit = false
 GTax.pendingDepositTimer = nil
 GTax.pendingDepositAmount = nil
+GTax.pendingDepositExpiresAt = nil
+GTax.lastConfirmedDepositFingerprint = nil
+GTax.lastConfirmedDepositAmount = nil
+GTax.lastConfirmedDepositAt = nil
 GTax.pendingWithdrawal = false
 GTax.pendingWithdrawalTimer = nil
 GTax.pendingWithdrawalAmount = nil
@@ -36,6 +40,7 @@ local function startPendingDepositTimer()
         GTax.pendingDepositTimer = C_Timer.NewTimer(2, function()
             GTax.pendingDeposit = false
             GTax.pendingDepositAmount = nil
+            GTax.pendingDepositExpiresAt = nil
             GTax.pendingDepositTimer = nil
         end)
         return
@@ -44,6 +49,7 @@ local function startPendingDepositTimer()
         C_Timer.After(2, function()
             GTax.pendingDeposit = false
             GTax.pendingDepositAmount = nil
+            GTax.pendingDepositExpiresAt = nil
             GTax.pendingDepositTimer = nil
         end)
     end
@@ -83,7 +89,20 @@ local function flagPendingDeposit(amount)
     else
         GTax.pendingDepositAmount = nil
     end
+    GTax.pendingDepositExpiresAt = time() + 10
     startPendingDepositTimer()
+end
+
+local function isDuplicateRecentDepositConfirmation(fingerprint, amount)
+    if type(GTax.lastConfirmedDepositAt) ~= "number" then return false end
+    if (time() - GTax.lastConfirmedDepositAt) > 3 then return false end
+
+    local sameFingerprint = (fingerprint ~= nil and fingerprint == GTax.lastConfirmedDepositFingerprint)
+    local sameAmount = type(amount) == "number"
+        and type(GTax.lastConfirmedDepositAmount) == "number"
+        and math.abs(amount - GTax.lastConfirmedDepositAmount) <= 1
+
+    return sameFingerprint or sameAmount
 end
 
 local function isLikelyDeposit(txType, who, amount)
@@ -165,20 +184,47 @@ local function scanGuildBankMoneyLog()
         end
     end
 
-    if newestDepositFingerprint and newestDepositFingerprint ~= entry.lastDepositFingerprint then
-        if GTax.pendingDeposit then
+    if newestDepositFingerprint then
+        local isNewDepositFingerprint = (newestDepositFingerprint ~= entry.lastDepositFingerprint)
+        local hasPendingDeposit = (type(GTax.pendingDepositAmount) == "number" and GTax.pendingDepositAmount > 0)
+            and (type(GTax.pendingDepositExpiresAt) ~= "number" or time() <= GTax.pendingDepositExpiresAt)
+        local pendingDepositMatchesLogAmount = hasPendingDeposit
+            and type(newestDepositAmount) == "number"
+            and math.abs((GTax.pendingDepositAmount or 0) - newestDepositAmount) <= 1
+
+        if GTax.pendingDeposit or (hasPendingDeposit and (isNewDepositFingerprint or pendingDepositMatchesLogAmount)) then
+            if isDuplicateRecentDepositConfirmation(newestDepositFingerprint, newestDepositAmount) then
+                GTax.pendingDeposit = false
+                GTax.pendingDepositAmount = nil
+                GTax.pendingDepositExpiresAt = nil
+                if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
+                    GTax.pendingDepositTimer:Cancel()
+                end
+                GTax.pendingDepositTimer = nil
+                entry.lastDepositFingerprint = newestDepositFingerprint
+                return
+            end
+
             GTax.pendingDeposit = false
+            local depositAmount = GTax.pendingDepositAmount or newestDepositAmount
             GTax.pendingDepositAmount = nil
+            GTax.pendingDepositExpiresAt = nil
             if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
                 GTax.pendingDepositTimer:Cancel()
             end
             GTax.pendingDepositTimer = nil
-            GTax.resetTracker("guild bank log detected", newestDepositFingerprint, newestDepositAmount)
+            GTax.lastConfirmedDepositFingerprint = newestDepositFingerprint
+            GTax.lastConfirmedDepositAmount = depositAmount
+            GTax.lastConfirmedDepositAt = time()
+            entry.lastDepositFingerprint = newestDepositFingerprint
+            GTax.resetTracker("guild bank log detected", newestDepositFingerprint, depositAmount)
             return
         end
 
-        -- No pending local deposit action: treat as historical baseline only.
-        entry.lastDepositFingerprint = newestDepositFingerprint
+        if isNewDepositFingerprint then
+            -- No pending local deposit action: treat as historical baseline only.
+            entry.lastDepositFingerprint = newestDepositFingerprint
+        end
     end
 
     if newestWithdrawalFingerprint then
@@ -252,14 +298,17 @@ local function onPlayerMoneyChanged()
             table.insert(entry.earningsHistory, { amount = delta, timestamp = time() })
         end
     elseif delta < 0 and GTax.pendingDeposit and GTax.guildBankIsOpen then
-        GTax.pendingDeposit = false
-        local depositAmount = GTax.pendingDepositAmount or math.abs(delta)
-        GTax.pendingDepositAmount = nil
-        if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
-            GTax.pendingDepositTimer:Cancel()
-        end
-        GTax.pendingDepositTimer = nil
-        GTax.resetTracker("guild bank deposit detected", nil, depositAmount)
+        local depositAmount = math.abs(delta)
+        flagPendingDeposit(depositAmount)
+        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
+        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+        scanGuildBankMoneyLog()
+    elseif delta < 0 and inGuildBankContext then
+        local depositAmount = math.abs(delta)
+        flagPendingDeposit(depositAmount)
+        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
+        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+        scanGuildBankMoneyLog()
     end
 
     entry.lastKnownMoney = current
@@ -278,6 +327,13 @@ local function hookGuildBankFrame()
     end)
     GuildBankFrame:HookScript("OnHide", function()
         GTax.guildBankIsOpen = false
+        GTax.pendingDeposit = false
+        GTax.pendingDepositAmount = nil
+        GTax.pendingDepositExpiresAt = nil
+        if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
+            GTax.pendingDepositTimer:Cancel()
+        end
+        GTax.pendingDepositTimer = nil
         GTax.pendingWithdrawal = false
         GTax.pendingWithdrawalAmount = nil
         GTax.pendingWithdrawalExpiresAt = nil
