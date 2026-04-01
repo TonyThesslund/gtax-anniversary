@@ -6,6 +6,7 @@ GTax = GTax or {}
 
 GTax.pendingDeposit = false
 GTax.pendingDepositTimer = nil
+GTax.pendingDepositAmount = nil
 GTax.guildBankIsOpen = false
 
 local function normalizePlayerName(name)
@@ -30,6 +31,7 @@ local function startPendingDepositTimer()
     if C_Timer.NewTimer then
         GTax.pendingDepositTimer = C_Timer.NewTimer(2, function()
             GTax.pendingDeposit = false
+            GTax.pendingDepositAmount = nil
             GTax.pendingDepositTimer = nil
         end)
         return
@@ -37,13 +39,20 @@ local function startPendingDepositTimer()
     if C_Timer.After then
         C_Timer.After(2, function()
             GTax.pendingDeposit = false
+            GTax.pendingDepositAmount = nil
             GTax.pendingDepositTimer = nil
         end)
     end
 end
 
-local function flagPendingDeposit()
+local function flagPendingDeposit(amount)
     GTax.pendingDeposit = true
+    local parsedAmount = tonumber(amount)
+    if type(parsedAmount) == "number" and parsedAmount > 0 then
+        GTax.pendingDepositAmount = math.floor(parsedAmount)
+    else
+        GTax.pendingDepositAmount = nil
+    end
     startPendingDepositTimer()
 end
 
@@ -82,8 +91,19 @@ local function scanGuildBankMoneyLog()
     end
 
     if newestDepositFingerprint and newestDepositFingerprint ~= entry.lastDepositFingerprint then
-        GTax.resetTracker("guild bank log detected", newestDepositFingerprint, newestDepositAmount)
-        return
+        if GTax.pendingDeposit then
+            GTax.pendingDeposit = false
+            GTax.pendingDepositAmount = nil
+            if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
+                GTax.pendingDepositTimer:Cancel()
+            end
+            GTax.pendingDepositTimer = nil
+            GTax.resetTracker("guild bank log detected", newestDepositFingerprint, newestDepositAmount)
+            return
+        end
+
+        -- No pending local deposit action: treat as historical baseline only.
+        entry.lastDepositFingerprint = newestDepositFingerprint
     end
 
     if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
@@ -104,8 +124,13 @@ local function onPlayerMoneyChanged()
         table.insert(entry.earningsHistory, { amount = delta, timestamp = time() })
     elseif delta < 0 and GTax.pendingDeposit and GTax.guildBankIsOpen then
         GTax.pendingDeposit = false
+        local depositAmount = GTax.pendingDepositAmount or math.abs(delta)
+        GTax.pendingDepositAmount = nil
+        if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
+            GTax.pendingDepositTimer:Cancel()
+        end
         GTax.pendingDepositTimer = nil
-        GTax.resetTracker("guild bank deposit detected", nil, math.abs(delta))
+        GTax.resetTracker("guild bank deposit detected", nil, depositAmount)
     end
 
     entry.lastKnownMoney = current

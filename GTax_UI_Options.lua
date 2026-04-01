@@ -6,7 +6,7 @@ GTax = GTax or {}
 
 GTax.UI = GTax.UI or {}
 
-local LEADERBOARD_ROWS = 14
+local LEADERBOARD_ROWS = 10
 local LB_PLAYER_X = 0
 local LB_TOTAL_X = 112
 local LB_TODAY_X = 272
@@ -19,6 +19,15 @@ local LB_WEEK_W = 155
 local LB_LAST_W = 155
 local LB_ROW_H = 20
 local LB_ROW_W = LB_LAST_X + LB_LAST_W - 8
+local LEFT_SECTION_GAP = -18
+
+local function getGuildLeaderboardTitle()
+    local guildName = GetGuildInfo and GetGuildInfo("player")
+    if type(guildName) == "string" and guildName ~= "" then
+        return guildName .. " Guild Leaderboard"
+    end
+    return "Guild Leaderboard"
+end
 
 local function createSectionTitle(parent, text, point, relativeTo, relativePoint, x, y)
     local title = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -128,6 +137,21 @@ function GTax.UI.UpdateLeaderboard()
         return string.lower(a.player or "") < string.lower(b.player or "")
     end)
 
+    local scrollOffset = 0
+    local maxOffset = math.max(0, #entries - LEADERBOARD_ROWS)
+    ui.leaderboardScrollOffset = math.min(math.max(ui.leaderboardScrollOffset or 0, 0), maxOffset)
+
+    if ui.leaderboardScrollFrame and FauxScrollFrame_Update then
+        FauxScrollFrame_Update(ui.leaderboardScrollFrame, #entries, LEADERBOARD_ROWS, LB_ROW_H)
+        if FauxScrollFrame_GetOffset then
+            scrollOffset = FauxScrollFrame_GetOffset(ui.leaderboardScrollFrame)
+        else
+            scrollOffset = ui.leaderboardScrollOffset
+        end
+    else
+        scrollOffset = ui.leaderboardScrollOffset
+    end
+
     if ui.leaderboardHeaders then
         for _, header in ipairs(ui.leaderboardHeaders) do
             local suffix = ""
@@ -143,7 +167,7 @@ function GTax.UI.UpdateLeaderboard()
 
     local myName = UnitName("player") or ""
     for i, row in ipairs(ui.leaderboardRows) do
-        local record = entries[i]
+        local record = entries[scrollOffset + i]
 
         if record then
             row.strip:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.09 or 0)
@@ -209,19 +233,30 @@ function GTax.UI.ToggleOptions()
         if ui.optionsFrame:IsShown() then
             ui.optionsFrame:Hide()
         else
+            if ui.leaderboardTitle then
+                ui.leaderboardTitle:SetText(getGuildLeaderboardTitle())
+            end
+            ui.optionsFrame:SetFrameStrata("DIALOG")
             ui.optionsFrame:Show()
+            ui.optionsFrame:Raise()
             GTax.UI.UpdateLeaderboard()
         end
         return
     end
     local opt = CreateFrame("Frame", "GTaxOptionsWindow", UIParent, "BasicFrameTemplateWithInset")
-    opt:SetSize(1020, 620)
+    opt:SetSize(1020, 540)
     opt:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     opt:SetMovable(true)
     opt:EnableMouse(true)
+    opt:SetToplevel(true)
+    opt:SetFrameStrata("DIALOG")
     opt:RegisterForDrag("LeftButton")
     opt:SetScript("OnDragStart", function(self) self:StartMoving() end)
     opt:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+    opt:HookScript("OnShow", function(self)
+        self:SetFrameStrata("DIALOG")
+        self:Raise()
+    end)
     if opt.Inset and opt.Inset.SetBackdropColor then
         opt.Inset:SetBackdropColor(0.03, 0.03, 0.03, 0.78)
     end
@@ -251,7 +286,7 @@ function GTax.UI.ToggleOptions()
         GTax.printMessage("Today's earned gold was reset.")
     end)
 
-    createActionButton(earnedBox, "Reset This Week", 132, 20, "TOPLEFT", resetTodayBtn, "BOTTOMLEFT", 0, -3, function()
+    local resetWeekBtn = createActionButton(earnedBox, "Reset This Week", 132, 20, "TOPLEFT", resetTodayBtn, "BOTTOMLEFT", 0, -3, function()
         local entry = GTax.ensureDB()
         GTax.clearEarningsSince(entry, GTax.getStartOfWeek())
         if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
@@ -260,7 +295,7 @@ function GTax.UI.ToggleOptions()
 
     local depositBox = CreateFrame("Frame", nil, opt)
     depositBox:SetSize(170, 110)
-    depositBox:SetPoint("TOPLEFT", earnedBox, "BOTTOMLEFT", 0, -78)
+    depositBox:SetPoint("TOPLEFT", resetWeekBtn, "BOTTOMLEFT", 0, LEFT_SECTION_GAP)
     createSectionTitle(depositBox, "Guild bank contributions", "TOPLEFT", depositBox, "TOPLEFT", 0, 0)
 
     createCheckbox(depositBox, "Contributed today", "depositToday", -28)
@@ -274,15 +309,15 @@ function GTax.UI.ToggleOptions()
         GTax.printMessage("Contribution history purged.")
     end)
 
-    local suggestTitle = createSectionTitle(opt, "Suggested contribution", "TOPLEFT", purgeBtn, "BOTTOMLEFT", 0, -22)
+    local suggestTitle = createSectionTitle(opt, "Suggested contribution", "TOPLEFT", purgeBtn, "BOTTOMLEFT", 0, LEFT_SECTION_GAP)
 
     local suggestBox = CreateFrame("Frame", nil, opt)
-    suggestBox:SetSize(220, 84)
+    suggestBox:SetSize(220, 30)
     suggestBox:SetPoint("TOPLEFT", suggestTitle, "BOTTOMLEFT", 0, -6)
     createCheckbox(suggestBox, "Suggest a contribution", "suggestedSinceLast", 0)
 
     local sliderLabel = opt:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    sliderLabel:SetPoint("TOPLEFT", suggestBox, "BOTTOMLEFT", 0, -8)
+    sliderLabel:SetPoint("TOPLEFT", suggestBox, "BOTTOMLEFT", 0, -2)
     sliderLabel:SetText("Tax %: " .. (GTax.ensureDB().taxPercent or 3))
     local slider = CreateFrame("Slider", "GTaxPercentSlider", opt, "OptionsSliderTemplate")
     slider:SetPoint("TOPLEFT", sliderLabel, "BOTTOMLEFT", 0, -8)
@@ -314,10 +349,12 @@ function GTax.UI.ToggleOptions()
 
     local divider = opt:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(0.35, 0.35, 0.35, 0.85)
-    divider:SetSize(2, 540)
+    divider:SetWidth(2)
     divider:SetPoint("TOPLEFT", opt, "TOPLEFT", 248, -34)
+    divider:SetPoint("BOTTOMLEFT", opt, "BOTTOMLEFT", 248, 30)
 
-    local leaderboardTitle = createSectionTitle(opt, "Guild Leaderboard", "TOPLEFT", opt, "TOPLEFT", 270, -34)
+    local leaderboardTitle = createSectionTitle(opt, getGuildLeaderboardTitle(), "TOPLEFT", opt, "TOPLEFT", 270, -34)
+    ui.leaderboardTitle = leaderboardTitle
     local headers = {
         createSortableLeaderboardHeader(opt, "Player", "player", 100, "TOPLEFT", leaderboardTitle, "BOTTOMLEFT", LB_PLAYER_X, -14),
         createSortableLeaderboardHeader(opt, "Contributed Total", "total", 150, "TOPLEFT", leaderboardTitle, "BOTTOMLEFT", LB_TOTAL_X, -14),
@@ -341,6 +378,22 @@ function GTax.UI.ToggleOptions()
         anchor = row.anchor
     end
     ui.leaderboardRows = rows
+
+    local scrollFrame = CreateFrame("ScrollFrame", "GTaxLeaderboardScrollFrame", opt, "FauxScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", headerDivider, "BOTTOMLEFT", LB_ROW_W + 3, -2)
+    scrollFrame:SetPoint("BOTTOMLEFT", rows[#rows].anchor, "BOTTOMLEFT", LB_ROW_W + 3, 0)
+    scrollFrame:SetScript("OnVerticalScroll", function(self, offset)
+        if FauxScrollFrame_OnVerticalScroll then
+            FauxScrollFrame_OnVerticalScroll(self, offset, LB_ROW_H, function()
+                if FauxScrollFrame_GetOffset then
+                    ui.leaderboardScrollOffset = FauxScrollFrame_GetOffset(self)
+                end
+                GTax.UI.UpdateLeaderboard()
+            end)
+        end
+    end)
+    ui.leaderboardScrollFrame = scrollFrame
+    ui.leaderboardScrollOffset = 0
 
     ui.optionsFrame = opt
     opt:Show()
