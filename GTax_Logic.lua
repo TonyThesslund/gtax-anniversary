@@ -249,15 +249,13 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 local name = UnitName("player") or "Unknown"
                 
                 if loanPayment > 0 and contributionAmount > 0 then
-                    -- Both loan payment and contribution
-                    -- Split across multiple lines: each message has at most one money amount
-                    -- (two money amounts + color codes per line exceeds 255-char SendAddonMessage limit)
                     local indent = string.rep(" ", 11)
                     local lines = {
-                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited to the guild bank:", name),
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited |cff00ff00%s|r into the guild bank!",
+                            name, GTax.formatMoney(depositAmount)),
                         indent .. "Loan paid off: " .. GTax.formatMoney(loanPayment),
-                        indent .. "Remaining loan: " .. GTax.formatMoney(entry.unpaidLoans),
                         indent .. "Contribution: " .. GTax.formatMoney(contributionAmount),
+                        indent .. "Remaining loan: " .. GTax.formatMoney(entry.unpaidLoans),
                     }
                     for i, line in ipairs(lines) do
                         C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
@@ -266,7 +264,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                     -- Loan payment only
                     local indent = string.rep(" ", 11)
                     local lines = {
-                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r paid off their loan by |cffff9999%s|r.", 
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited |cffff9999%s|r into the guild bank.",
                             name, GTax.formatMoney(loanPayment)),
                         indent .. "Remaining loan: " .. GTax.formatMoney(entry.unpaidLoans),
                     }
