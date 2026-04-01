@@ -64,7 +64,4 @@ local function handleSlash(msg)
 end
 
 SLASH_GUILDBANKEARNINGS1 = "/gtax"
-SLASH_GUILDBANKEARNINGS2 = "/gt"
-SLASH_GUILDBANKEARNINGS3 = "/gbe"
-SLASH_GUILDBANKEARNINGS4 = "/gbearn"
 SlashCmdList.GUILDBANKEARNINGS = handleSlash
