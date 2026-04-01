@@ -287,7 +287,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                         local pct = entry.taxPercent or 3
                         local indent = string.rep(" ", 11)
                         local lines = {
-                            string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                            string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r contributed to the guild bank!", name),
                             indent .. "Amount: " .. GTax.formatMoney(contributionAmount),
                             indent .. "Suggested: " .. GTax.formatMoney(suggested) .. ", at " .. pct .. "%",
                             indent .. "Previous contribution was " .. timeSince .. ".",
@@ -298,7 +298,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                     else
                         local indent = string.rep(" ", 11)
                         local lines = {
-                            string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                            string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r contributed to the guild bank!", name),
                             indent .. "Amount: " .. GTax.formatMoney(contributionAmount),
                             indent .. "Previous contribution was " .. timeSince .. ".",
                         }
