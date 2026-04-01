@@ -6,8 +6,7 @@ GTax = GTax or {}
 
 GTax.defaults = {
     earnedSinceDeposit = 0,
-    earnedToday = 0,
-    earnedWeek = 0,
+    earningsHistory = {},
     lastKnownMoney = nil,
     lastResetAt = 0,
     lastDepositFingerprint = nil,

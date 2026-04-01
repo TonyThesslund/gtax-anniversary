@@ -51,6 +51,37 @@ function GTax.getDepositSums(entry)
     return today, week, total
 end
 
+function GTax.getEarningsSums(entry)
+    local history = entry.earningsHistory
+    if type(history) ~= "table" then return 0, 0 end
+
+    local todayStart = GTax.getStartOfDay()
+    local weekStart = GTax.getStartOfWeek()
+    local today, week = 0, 0
+    for _, record in ipairs(history) do
+        local amount = record.amount or 0
+        local timestamp = record.timestamp or 0
+        if timestamp >= weekStart then week = week + amount end
+        if timestamp >= todayStart then today = today + amount end
+    end
+    return today, week
+end
+
+function GTax.clearEarningsSince(entry, cutoffTimestamp)
+    if type(entry.earningsHistory) ~= "table" then
+        entry.earningsHistory = {}
+        return
+    end
+
+    local retainedHistory = {}
+    for _, record in ipairs(entry.earningsHistory) do
+        if (record.timestamp or 0) < cutoffTimestamp then
+            table.insert(retainedHistory, record)
+        end
+    end
+    entry.earningsHistory = retainedHistory
+end
+
 function GTax.getDepositColor(timestamp)
     if type(timestamp) ~= "number" or timestamp <= 0 then return 1, 0, 0 end
     local elapsed = time() - timestamp
@@ -76,7 +107,6 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
         GTax.recordDeposit(entry, depositAmount)
         if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
             local name = UnitName("player") or "Unknown"
-            local entry = GTax.ensureDB()
             local showSuggested = true
             if type(entry.show) == "table" and entry.show.suggestedSinceLast == false then
                 showSuggested = false
@@ -87,27 +117,13 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 local pct = entry.taxPercent or 3
                 suggested = GTax.getSuggestedDeposit(money, pct)
             end
-            local function fmt(money)
-                local g = math.floor(money / (100 * 100))
-                local s = math.floor((money / 100) % 100)
-                local c = money % 100
-                local parts = {}
-                local goldIcon = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t"
-                local silverIcon = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t"
-                local copperIcon = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
-                if g > 0 then table.insert(parts, g .. goldIcon) end
-                if s > 0 or g > 0 then table.insert(parts, s .. silverIcon) end
-                table.insert(parts, c .. copperIcon)
-                return table.concat(parts, " ")
-            end
-            local msg
             if showSuggested then
                 local pct = entry.taxPercent or 3
                 local indent = string.rep(" ", 11)
                 local lines = {
                     string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
-                    indent .. "Amount: " .. fmt(depositAmount),
-                    indent .. "Suggested: " .. fmt(suggested) .. ", at " .. pct .. "%",
+                    indent .. "Amount: " .. GTax.formatMoney(depositAmount),
+                    indent .. "Suggested: " .. GTax.formatMoney(suggested) .. ", at " .. pct .. "%",
                     indent .. "Previous contribution was " .. timeSince .. ".",
                 }
                 for i, line in ipairs(lines) do
@@ -117,7 +133,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 local indent = string.rep(" ", 11)
                 local lines = {
                     string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
-                    indent .. "Amount: " .. fmt(depositAmount),
+                    indent .. "Amount: " .. GTax.formatMoney(depositAmount),
                     indent .. "Previous contribution was " .. timeSince .. ".",
                 }
                 for i, line in ipairs(lines) do
