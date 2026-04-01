@@ -4,8 +4,6 @@
 local addonName, GTax = ...
 GTax = GTax or {}
 
-GTax.leaderboardCache = GTax.leaderboardCache or {}
-
 local function normalizePlayerName(name)
     if type(name) ~= "string" then return "Unknown" end
     local shortName = string.match(name, "^[^-]+") or name
@@ -33,19 +31,24 @@ function GTax.getLeaderboardSnapshot()
 end
 
 function GTax.updateLeaderboardEntry(player, total, today, week, lastContributionAt)
+    local entry = GTax.ensureDB()
+    if type(entry.leaderboardCache) ~= "table" then entry.leaderboardCache = {} end
     local key = normalizePlayerName(player)
-    GTax.leaderboardCache[key] = {
+    entry.leaderboardCache[key] = {
         player = key,
         total = parseNumber(total),
         today = parseNumber(today),
         week = parseNumber(week),
         lastContributionAt = parseNumber(lastContributionAt),
+        unpaidLoans = parseNumber(entry.unpaidLoans or 0),
         updatedAt = time(),
     }
 end
 
 function GTax.getLeaderboardEntries()
     local entries = {}
+    local entry = GTax.ensureDB()
+    if type(entry.leaderboardCache) ~= "table" then entry.leaderboardCache = {} end
 
     local localSnapshot = GTax.getLeaderboardSnapshot()
     GTax.updateLeaderboardEntry(
@@ -56,7 +59,7 @@ function GTax.getLeaderboardEntries()
         localSnapshot.lastContributionAt
     )
 
-    for _, record in pairs(GTax.leaderboardCache) do
+    for _, record in pairs(entry.leaderboardCache) do
         table.insert(entries, record)
     end
 
@@ -227,46 +230,90 @@ end
 function GTax.resetTracker(reason, fingerprint, depositAmount)
     local entry = GTax.ensureDB()
     local timeSince = GTax.formatTimeSinceDeposit(entry.lastResetAt)
+    if type(entry.unpaidLoans) ~= "number" then entry.unpaidLoans = 0 end
+    
     if depositAmount then
-        -- Guild bank deposit: only reset since last deposit, update lastResetAt and fingerprint
-        GTax.recordDeposit(entry, depositAmount)
-        if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
-            local name = UnitName("player") or "Unknown"
-            local showSuggested = true
-            if type(entry.show) == "table" and entry.show.suggestedSinceLast == false then
-                showSuggested = false
-            end
-            local suggested = 0
-            if showSuggested and GTax.getSuggestedDeposit then
-                local money = entry.earnedSinceDeposit or 0
-                local pct = entry.taxPercent or 3
-                suggested = GTax.getSuggestedDeposit(money, pct)
-            end
-            if showSuggested then
-                local pct = entry.taxPercent or 3
-                local indent = string.rep(" ", 11)
-                local lines = {
-                    string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
-                    indent .. "Amount: " .. GTax.formatMoney(depositAmount),
-                    indent .. "Suggested: " .. GTax.formatMoney(suggested) .. ", at " .. pct .. "%",
-                    indent .. "Previous contribution was " .. timeSince .. ".",
-                }
-                for i, line in ipairs(lines) do
-                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
-                end
-            else
-                local indent = string.rep(" ", 11)
-                local lines = {
-                    string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
-                    indent .. "Amount: " .. GTax.formatMoney(depositAmount),
-                    indent .. "Previous contribution was " .. timeSince .. ".",
-                }
-                for i, line in ipairs(lines) do
-                    C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
-                end
-            end
-            -- Do not print locally; handled by addon message handler
+        -- Guild bank deposit: apply to unpaid loans first if any
+        local contributionAmount = depositAmount
+        local loanPayment = 0
+        
+        if entry.unpaidLoans > 0 then
+            loanPayment = math.min(depositAmount, entry.unpaidLoans)
+            entry.unpaidLoans = entry.unpaidLoans - loanPayment
+            contributionAmount = depositAmount - loanPayment
         end
+        
+        -- Send broadcast message (either loan payment, contribution, or both)
+        if loanPayment > 0 or contributionAmount > 0 then
+            if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
+                local name = UnitName("player") or "Unknown"
+                
+                if loanPayment > 0 and contributionAmount > 0 then
+                    -- Both loan payment and contribution
+                    local indent = string.rep(" ", 11)
+                    local lines = {
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r paid off their loan of |cffff9999%s|r and |cff00ff00contributed|r |cff00ff00%s|r.", 
+                            name, GTax.formatMoney(loanPayment), GTax.formatMoney(contributionAmount)),
+                        indent .. "Remaining loan: " .. GTax.formatMoney(entry.unpaidLoans),
+                    }
+                    for i, line in ipairs(lines) do
+                        C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                    end
+                elseif loanPayment > 0 then
+                    -- Loan payment only
+                    local indent = string.rep(" ", 11)
+                    local lines = {
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r paid off their loan by |cffff9999%s|r.", 
+                            name, GTax.formatMoney(loanPayment)),
+                        indent .. "Remaining loan: " .. GTax.formatMoney(entry.unpaidLoans),
+                    }
+                    for i, line in ipairs(lines) do
+                        C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                    end
+                else
+                    -- Pure contribution (no loan payment)
+                    local showSuggested = true
+                    if type(entry.show) == "table" and entry.show.suggestedSinceLast == false then
+                        showSuggested = false
+                    end
+                    local suggested = 0
+                    if showSuggested and GTax.getSuggestedDeposit then
+                        local money = entry.earnedSinceDeposit or 0
+                        local pct = entry.taxPercent or 3
+                        suggested = GTax.getSuggestedDeposit(money, pct)
+                    end
+                    if showSuggested then
+                        local pct = entry.taxPercent or 3
+                        local indent = string.rep(" ", 11)
+                        local lines = {
+                            string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                            indent .. "Amount: " .. GTax.formatMoney(contributionAmount),
+                            indent .. "Suggested: " .. GTax.formatMoney(suggested) .. ", at " .. pct .. "%",
+                            indent .. "Previous contribution was " .. timeSince .. ".",
+                        }
+                        for i, line in ipairs(lines) do
+                            C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                        end
+                    else
+                        local indent = string.rep(" ", 11)
+                        local lines = {
+                            string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed to the guild bank!", name),
+                            indent .. "Amount: " .. GTax.formatMoney(contributionAmount),
+                            indent .. "Previous contribution was " .. timeSince .. ".",
+                        }
+                        for i, line in ipairs(lines) do
+                            C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Record contribution for history (if there's any contribution amount)
+        if contributionAmount > 0 then
+            GTax.recordDeposit(entry, contributionAmount)
+        end
+        
         entry.lastResetAt = time()
         entry.earnedSinceDeposit = 0
         if fingerprint then entry.lastDepositFingerprint = fingerprint end

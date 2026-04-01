@@ -6,19 +6,21 @@ GTax = GTax or {}
 
 GTax.UI = GTax.UI or {}
 
-local LEADERBOARD_ROWS = 10
+local LEADERBOARD_ROWS = 20
 local LB_PLAYER_X = 0
 local LB_TOTAL_X = 112
 local LB_TODAY_X = 272
 local LB_WEEK_X = 432
 local LB_LAST_X = 600
+local LB_LOANS_X = 765
 local LB_PLAYER_W = 100
 local LB_TOTAL_W = 150
 local LB_TODAY_W = 150
 local LB_WEEK_W = 155
 local LB_LAST_W = 155
+local LB_LOANS_W = 90
 local LB_ROW_H = 20
-local LB_ROW_W = LB_LAST_X + LB_LAST_W - 8
+local LB_ROW_W = LB_LOANS_X + LB_LOANS_W - 8
 local LEFT_SECTION_GAP = -18
 
 local function getGuildLeaderboardTitle()
@@ -68,6 +70,7 @@ local function createLeaderboardRow(parent, anchor, yOffset)
     row.today = createLeaderboardCell(parent, "GameFontNormalSmall", "LEFT", rowAnchor, "LEFT", LB_TODAY_X, 0)
     row.week = createLeaderboardCell(parent, "GameFontNormalSmall", "LEFT", rowAnchor, "LEFT", LB_WEEK_X, 0)
     row.last = createLeaderboardCell(parent, "GameFontNormalSmall", "LEFT", rowAnchor, "LEFT", LB_LAST_X, 0)
+    row.loans = createLeaderboardCell(parent, "GameFontNormalSmall", "LEFT", rowAnchor, "LEFT", LB_LOANS_X, 0)
     return row
 end
 
@@ -176,11 +179,18 @@ function GTax.UI.UpdateLeaderboard()
             row.today:SetText(GTax.formatMoney(record.today))
             row.week:SetText(GTax.formatMoney(record.week))
             row.last:SetText(GTax.formatTimeSinceDeposit(record.lastContributionAt))
+            row.loans:SetText(GTax.formatMoney(record.unpaidLoans or 0))
 
             row.total:SetTextColor(1, 1, 1)
             row.today:SetTextColor(1, 1, 1)
             row.week:SetTextColor(1, 1, 1)
             row.last:SetTextColor(1, 1, 1)
+
+            if (record.unpaidLoans or 0) > 0 then
+                row.loans:SetTextColor(1, 0.2, 0.2)
+            else
+                row.loans:SetTextColor(1, 1, 1)
+            end
 
             if record.player == myName then
                 row.player:SetTextColor(1, 0.82, 0)
@@ -192,6 +202,7 @@ function GTax.UI.UpdateLeaderboard()
             row.today:Show()
             row.week:Show()
             row.last:Show()
+            row.loans:Show()
             row.player:Show()
         else
             row.player:SetText("")
@@ -199,6 +210,7 @@ function GTax.UI.UpdateLeaderboard()
             row.today:SetText("")
             row.week:SetText("")
             row.last:SetText("")
+            row.loans:SetText("")
             row.strip:SetColorTexture(1, 1, 1, 0)
         end
     end
@@ -244,7 +256,7 @@ function GTax.UI.ToggleOptions()
         return
     end
     local opt = CreateFrame("Frame", "GTaxOptionsWindow", UIParent, "BasicFrameTemplateWithInset")
-    opt:SetSize(1020, 540)
+    opt:SetSize(950, 540)
     opt:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     opt:SetMovable(true)
     opt:EnableMouse(true)
@@ -361,6 +373,7 @@ function GTax.UI.ToggleOptions()
         createSortableLeaderboardHeader(opt, "Contributed Today", "today", 150, "TOPLEFT", leaderboardTitle, "BOTTOMLEFT", LB_TODAY_X, -14),
         createSortableLeaderboardHeader(opt, "Contributed This Week", "week", 155, "TOPLEFT", leaderboardTitle, "BOTTOMLEFT", LB_WEEK_X, -14),
         createSortableLeaderboardHeader(opt, "Last Contribution", "lastContributionAt", 155, "TOPLEFT", leaderboardTitle, "BOTTOMLEFT", LB_LAST_X, -14),
+        createSortableLeaderboardHeader(opt, "Unpaid Loans", "unpaidLoans", 90, "TOPLEFT", leaderboardTitle, "BOTTOMLEFT", LB_LOANS_X, -14),
     }
     ui.leaderboardHeaders = headers
 

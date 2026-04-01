@@ -119,9 +119,24 @@ local function onPlayerMoneyChanged()
 
     local delta = current - entry.lastKnownMoney
     if delta > 0 then
-        entry.earnedSinceDeposit = entry.earnedSinceDeposit + delta
-        if type(entry.earningsHistory) ~= "table" then entry.earningsHistory = {} end
-        table.insert(entry.earningsHistory, { amount = delta, timestamp = time() })
+        -- Money gained: could be earnings or guild bank withdrawal
+        if GTax.guildBankIsOpen then
+            -- Likely withdrawal from guild bank
+            if type(entry.unpaidLoans) ~= "number" then entry.unpaidLoans = 0 end
+            entry.unpaidLoans = entry.unpaidLoans + delta
+            -- Broadcast the withdrawal
+            if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
+                local name = UnitName("player") or "Unknown"
+                C_ChatInfo.SendAddonMessage("GTax", 
+                    string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r withdrew |cffff6b6b%s|r from guild bank.", name, GTax.formatMoney(delta)), 
+                    "GUILD")
+            end
+        else
+            -- Regular earned gold
+            entry.earnedSinceDeposit = entry.earnedSinceDeposit + delta
+            if type(entry.earningsHistory) ~= "table" then entry.earningsHistory = {} end
+            table.insert(entry.earningsHistory, { amount = delta, timestamp = time() })
+        end
     elseif delta < 0 and GTax.pendingDeposit and GTax.guildBankIsOpen then
         GTax.pendingDeposit = false
         local depositAmount = GTax.pendingDepositAmount or math.abs(delta)

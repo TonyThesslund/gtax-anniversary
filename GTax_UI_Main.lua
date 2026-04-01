@@ -23,6 +23,8 @@ function GTax.UI.UpdateWindow()
         entry.show = {}
         for k, v in pairs(GTax.defaults.show) do entry.show[k] = v end
     end
+    if type(entry.unpaidLoans) ~= "number" then entry.unpaidLoans = 0 end
+    
     local showEarned = entry.show.earned ~= false
     local showEarnedToday = entry.show.earnedToday == true
     local showEarnedWeek = entry.show.earnedWeek == true
@@ -36,6 +38,19 @@ function GTax.UI.UpdateWindow()
 
     ui.earnedText:SetText("Earned since last contribution: " .. GTax.formatMoney(entry.earnedSinceDeposit))
     ui.earnedText:SetShown(showEarned)
+
+    -- Unpaid loans text
+    if not ui.unpaidLoansText then
+        ui.unpaidLoansText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        ui.unpaidLoansText:SetJustifyH("LEFT")
+    end
+    if entry.unpaidLoans > 0 then
+        ui.unpaidLoansText:SetText("Current unpaid loans: " .. GTax.formatMoney(entry.unpaidLoans))
+        ui.unpaidLoansText:SetTextColor(1, 0.2, 0.2)
+        ui.unpaidLoansText:Show()
+    else
+        ui.unpaidLoansText:Hide()
+    end
 
     -- Earned today/week text
     if not ui.earnedTodayText then
@@ -79,6 +94,7 @@ function GTax.UI.UpdateWindow()
     -- Re-anchor visible elements
     local elements = {
         { text = ui.earnedText, visible = showEarned, gap = false },
+        { text = ui.unpaidLoansText, visible = (entry.unpaidLoans > 0), gap = false },
         { text = ui.earnedTodayText, visible = showEarnedToday, gap = false },
         { text = ui.earnedWeekText, visible = showEarnedWeek, gap = false },
         { text = nil, visible = true, gap = true },
