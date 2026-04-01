@@ -8,9 +8,6 @@ GTax.pendingDeposit = false
 GTax.pendingDepositTimer = nil
 GTax.pendingDepositAmount = nil
 GTax.pendingDepositExpiresAt = nil
-GTax.lastConfirmedDepositFingerprint = nil
-GTax.lastConfirmedDepositAmount = nil
-GTax.lastConfirmedDepositAt = nil
 GTax.pendingWithdrawal = false
 GTax.pendingWithdrawalTimer = nil
 GTax.pendingWithdrawalAmount = nil
@@ -93,30 +90,16 @@ local function flagPendingDeposit(amount)
     startPendingDepositTimer()
 end
 
-local function isDuplicateRecentDepositConfirmation(fingerprint, amount)
-    if type(GTax.lastConfirmedDepositAt) ~= "number" then return false end
-    if (time() - GTax.lastConfirmedDepositAt) > 3 then return false end
-
-    local sameFingerprint = (fingerprint ~= nil and fingerprint == GTax.lastConfirmedDepositFingerprint)
-    local sameAmount = type(amount) == "number"
-        and type(GTax.lastConfirmedDepositAmount) == "number"
-        and math.abs(amount - GTax.lastConfirmedDepositAmount) <= 1
-
-    return sameFingerprint or sameAmount
-end
-
-local function isLikelyDeposit(txType, who, amount)
-    if txType ~= "deposit" or type(amount) ~= "number" or amount <= 0 then
-        return false
+local function flagPendingWithdrawal(amount)
+    GTax.pendingWithdrawal = true
+    local parsedAmount = tonumber(amount)
+    if type(parsedAmount) == "number" and parsedAmount > 0 then
+        GTax.pendingWithdrawalAmount = math.floor(parsedAmount)
+    else
+        GTax.pendingWithdrawalAmount = nil
     end
-    return normalizePlayerName(who) == normalizePlayerName(UnitName("player"))
-end
-
-local function isLikelyWithdrawal(txType, who, amount)
-    if txType ~= "withdraw" or type(amount) ~= "number" or amount <= 0 then
-        return false
-    end
-    return normalizePlayerName(who) == normalizePlayerName(UnitName("player"))
+    GTax.pendingWithdrawalExpiresAt = time() + 10
+    startPendingWithdrawalTimer()
 end
 
 local function applyConfirmedWithdrawal(entry, amount)
@@ -139,120 +122,6 @@ local function applyConfirmedWithdrawal(entry, amount)
 
     if GTax.sendLeaderboardData then GTax.sendLeaderboardData() end
     if GTax.UI and GTax.UI.UpdateLeaderboard then GTax.UI.UpdateLeaderboard() end
-end
-
-local function scanGuildBankMoneyLog()
-    if type(GetNumGuildBankMoneyTransactions) ~= "function" then return end
-    if type(GetGuildBankMoneyTransaction) ~= "function" then return end
-
-    local entry = GTax.ensureDB()
-    local num = GetNumGuildBankMoneyTransactions()
-    if type(num) ~= "number" or num <= 0 then return end
-
-    local newestDepositFingerprint
-    local newestDepositAmount
-    local newestWithdrawalFingerprint
-    local newestWithdrawalAmount
-    for i = 1, num do
-        local txType, who, amount, years, months, days, hours = GetGuildBankMoneyTransaction(i)
-        if not newestDepositFingerprint and isLikelyDeposit(txType, who, amount) then
-            newestDepositFingerprint = table.concat({
-                tostring(txType),
-                tostring(who),
-                tostring(amount),
-                tostring(years),
-                tostring(months),
-                tostring(days),
-                tostring(hours),
-            }, "|")
-            newestDepositAmount = amount
-        end
-        if not newestWithdrawalFingerprint and isLikelyWithdrawal(txType, who, amount) then
-            newestWithdrawalFingerprint = table.concat({
-                tostring(txType),
-                tostring(who),
-                tostring(amount),
-                tostring(years),
-                tostring(months),
-                tostring(days),
-                tostring(hours),
-            }, "|")
-            newestWithdrawalAmount = amount
-        end
-        if newestDepositFingerprint and newestWithdrawalFingerprint then
-            break
-        end
-    end
-
-    if newestDepositFingerprint then
-        local isNewDepositFingerprint = (newestDepositFingerprint ~= entry.lastDepositFingerprint)
-        local hasPendingDeposit = (type(GTax.pendingDepositAmount) == "number" and GTax.pendingDepositAmount > 0)
-            and (type(GTax.pendingDepositExpiresAt) ~= "number" or time() <= GTax.pendingDepositExpiresAt)
-        local pendingDepositMatchesLogAmount = hasPendingDeposit
-            and type(newestDepositAmount) == "number"
-            and math.abs((GTax.pendingDepositAmount or 0) - newestDepositAmount) <= 1
-
-        if GTax.pendingDeposit or (hasPendingDeposit and (isNewDepositFingerprint or pendingDepositMatchesLogAmount)) then
-            if isDuplicateRecentDepositConfirmation(newestDepositFingerprint, newestDepositAmount) then
-                GTax.pendingDeposit = false
-                GTax.pendingDepositAmount = nil
-                GTax.pendingDepositExpiresAt = nil
-                if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
-                    GTax.pendingDepositTimer:Cancel()
-                end
-                GTax.pendingDepositTimer = nil
-                entry.lastDepositFingerprint = newestDepositFingerprint
-                return
-            end
-
-            GTax.pendingDeposit = false
-            local depositAmount = GTax.pendingDepositAmount or newestDepositAmount
-            GTax.pendingDepositAmount = nil
-            GTax.pendingDepositExpiresAt = nil
-            if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
-                GTax.pendingDepositTimer:Cancel()
-            end
-            GTax.pendingDepositTimer = nil
-            GTax.lastConfirmedDepositFingerprint = newestDepositFingerprint
-            GTax.lastConfirmedDepositAmount = depositAmount
-            GTax.lastConfirmedDepositAt = time()
-            entry.lastDepositFingerprint = newestDepositFingerprint
-            GTax.resetTracker("guild bank log detected", newestDepositFingerprint, depositAmount)
-            return
-        end
-
-        if isNewDepositFingerprint then
-            -- No pending local deposit action: treat as historical baseline only.
-            entry.lastDepositFingerprint = newestDepositFingerprint
-        end
-    end
-
-    if newestWithdrawalFingerprint then
-        local isNewWithdrawalFingerprint = (newestWithdrawalFingerprint ~= entry.lastWithdrawalFingerprint)
-        local hasPendingWithdrawal = (type(GTax.pendingWithdrawalAmount) == "number" and GTax.pendingWithdrawalAmount > 0)
-            and (type(GTax.pendingWithdrawalExpiresAt) ~= "number" or time() <= GTax.pendingWithdrawalExpiresAt)
-        local pendingMatchesLogAmount = hasPendingWithdrawal
-            and type(newestWithdrawalAmount) == "number"
-            and math.abs((GTax.pendingWithdrawalAmount or 0) - newestWithdrawalAmount) <= 1
-
-        if GTax.pendingWithdrawal or (hasPendingWithdrawal and (isNewWithdrawalFingerprint or pendingMatchesLogAmount)) then
-            GTax.pendingWithdrawal = false
-            local withdrawalAmount = GTax.pendingWithdrawalAmount or newestWithdrawalAmount
-            GTax.pendingWithdrawalAmount = nil
-            GTax.pendingWithdrawalExpiresAt = nil
-            if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
-                GTax.pendingWithdrawalTimer:Cancel()
-            end
-            GTax.pendingWithdrawalTimer = nil
-            entry.lastWithdrawalFingerprint = newestWithdrawalFingerprint
-            applyConfirmedWithdrawal(entry, withdrawalAmount)
-        elseif isNewWithdrawalFingerprint then
-            -- No pending local withdrawal action: treat as historical baseline only.
-            entry.lastWithdrawalFingerprint = newestWithdrawalFingerprint
-        end
-    end
-
-    if GTax.UI and GTax.UI.UpdateWindow then GTax.UI.UpdateWindow() end
 end
 
 local function onPlayerMoneyChanged()
@@ -281,34 +150,20 @@ local function onPlayerMoneyChanged()
     local inGuildBankContext = GTax.guildBankIsOpen and not merchantOpen
 
     if delta > 0 then
-        -- Money gained: could be earnings or guild bank withdrawal
-        if inGuildBankContext then
-            -- Potential withdrawal from guild bank; confirm via bank money log before counting as loan.
-            GTax.pendingWithdrawal = true
-            GTax.pendingWithdrawalAmount = math.floor(delta)
-            GTax.pendingWithdrawalExpiresAt = time() + 10
-            startPendingWithdrawalTimer()
-            local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
-            if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
-            scanGuildBankMoneyLog()
-        else
-            -- Regular earned gold
+        if not inGuildBankContext then
+            -- Regular earned gold (vendor sale, quest reward, etc.)
             entry.earnedSinceDeposit = entry.earnedSinceDeposit + delta
             if type(entry.earningsHistory) ~= "table" then entry.earningsHistory = {} end
             table.insert(entry.earningsHistory, { amount = delta, timestamp = time() })
         end
-    elseif delta < 0 and GTax.pendingDeposit and GTax.guildBankIsOpen then
-        local depositAmount = math.abs(delta)
-        flagPendingDeposit(depositAmount)
-        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
-        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
-        scanGuildBankMoneyLog()
+        -- If guild bank is open, the positive delta is a withdrawal —
+        -- WithdrawGuildBankMoney hook already captured the amount, so nothing to do here.
     elseif delta < 0 and inGuildBankContext then
-        local depositAmount = math.abs(delta)
-        flagPendingDeposit(depositAmount)
-        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
-        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
-        scanGuildBankMoneyLog()
+        -- Fallback: money left wallet while guild bank open but hook may not have fired.
+        -- flagPendingDeposit only if not already pending (hook sets it first).
+        if not GTax.pendingDeposit then
+            flagPendingDeposit(math.abs(delta))
+        end
     end
 
     entry.lastKnownMoney = current
@@ -319,6 +174,16 @@ local function hookGuildBankFrame()
     if GTax.uiGuildBankHooked or not GuildBankFrame then return end
 
     GTax.uiGuildBankHooked = true
+
+    -- Hook deposit and withdrawal functions here, not on login,
+    -- because these are defined in Blizzard_GuildBankUI which loads lazily.
+    if DepositGuildBankMoney then
+        hooksecurefunc("DepositGuildBankMoney", flagPendingDeposit)
+    end
+    if WithdrawGuildBankMoney then
+        hooksecurefunc("WithdrawGuildBankMoney", flagPendingWithdrawal)
+    end
+
     GuildBankFrame:HookScript("OnShow", function()
         GTax.guildBankIsOpen = true
         local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
@@ -347,11 +212,6 @@ end
 local function initializeAddon()
     local entry = GTax.ensureDB()
     entry.lastKnownMoney = entry.lastKnownMoney or (GetMoney() or 0)
-
-    if not GTax.depositHooked and DepositGuildBankMoney then
-        GTax.depositHooked = true
-        hooksecurefunc("DepositGuildBankMoney", flagPendingDeposit)
-    end
 
     if GTax.UI and GTax.UI.CreateWindow then GTax.UI.CreateWindow() end
     if GTax.MinimapButton and GTax.MinimapButton.Create then GTax.MinimapButton.Create() end
@@ -429,9 +289,43 @@ frame:SetScript("OnEvent", function(_, event, ...)
         return
     end
 
-    if event == "GUILDBANK_UPDATE_MONEY" or event == "GUILDBANKLOG_UPDATE" then
-        -- Do NOT call QueryGuildBankLog here: it would trigger GUILDBANKLOG_UPDATE again, causing an infinite loop.
-        -- The data is already fresh when this event fires.
-        scanGuildBankMoneyLog()
+    if event == "GUILDBANK_UPDATE_MONEY" then
+        -- Guild bank money changed. Confirm pending deposit or withdrawal.
+        local entry = GTax.ensureDB()
+        local hasPendingDeposit = GTax.pendingDeposit
+            or (type(GTax.pendingDepositAmount) == "number" and GTax.pendingDepositAmount > 0
+                and (type(GTax.pendingDepositExpiresAt) ~= "number" or time() <= GTax.pendingDepositExpiresAt))
+        if hasPendingDeposit then
+            local depositAmount = GTax.pendingDepositAmount
+            GTax.pendingDeposit = false
+            GTax.pendingDepositAmount = nil
+            GTax.pendingDepositExpiresAt = nil
+            if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
+                GTax.pendingDepositTimer:Cancel()
+            end
+            GTax.pendingDepositTimer = nil
+            GTax.resetTracker("guild bank deposit", nil, depositAmount)
+            return
+        end
+
+        local hasPendingWithdrawal = GTax.pendingWithdrawal
+            or (type(GTax.pendingWithdrawalAmount) == "number" and GTax.pendingWithdrawalAmount > 0
+                and (type(GTax.pendingWithdrawalExpiresAt) ~= "number" or time() <= GTax.pendingWithdrawalExpiresAt))
+        if hasPendingWithdrawal then
+            local withdrawalAmount = GTax.pendingWithdrawalAmount
+            GTax.pendingWithdrawal = false
+            GTax.pendingWithdrawalAmount = nil
+            GTax.pendingWithdrawalExpiresAt = nil
+            if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
+                GTax.pendingWithdrawalTimer:Cancel()
+            end
+            GTax.pendingWithdrawalTimer = nil
+            applyConfirmedWithdrawal(entry, withdrawalAmount)
+        end
+        return
+    end
+
+    if event == "GUILDBANKLOG_UPDATE" then
+        return -- no longer used
     end
 end)
