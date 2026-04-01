@@ -250,11 +250,14 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 
                 if loanPayment > 0 and contributionAmount > 0 then
                     -- Both loan payment and contribution
+                    -- Split across multiple lines: each message has at most one money amount
+                    -- (two money amounts + color codes per line exceeds 255-char SendAddonMessage limit)
                     local indent = string.rep(" ", 11)
                     local lines = {
-                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r paid off their loan of |cffff9999%s|r and |cff00ff00contributed|r |cff00ff00%s|r.", 
-                            name, GTax.formatMoney(loanPayment), GTax.formatMoney(contributionAmount)),
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited to the guild bank:", name),
+                        indent .. "Loan paid off: " .. GTax.formatMoney(loanPayment),
                         indent .. "Remaining loan: " .. GTax.formatMoney(entry.unpaidLoans),
+                        indent .. "Contribution: " .. GTax.formatMoney(contributionAmount),
                     }
                     for i, line in ipairs(lines) do
                         C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
