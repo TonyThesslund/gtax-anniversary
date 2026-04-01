@@ -251,7 +251,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 if loanPayment > 0 and contributionAmount > 0 then
                     local indent = string.rep(" ", 11)
                     local lines = {
-                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited |cff00ff00%s|r into the guild bank!",
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited %s into the guild bank!",
                             name, GTax.formatMoney(depositAmount)),
                         indent .. "Loan paid off: " .. GTax.formatMoney(loanPayment),
                         indent .. "Contribution: " .. GTax.formatMoney(contributionAmount),
@@ -264,7 +264,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                     -- Loan payment only
                     local indent = string.rep(" ", 11)
                     local lines = {
-                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited |cffff9999%s|r into the guild bank.",
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited %s into the guild bank.",
                             name, GTax.formatMoney(loanPayment)),
                         indent .. "Remaining loan: " .. GTax.formatMoney(entry.unpaidLoans),
                     }
