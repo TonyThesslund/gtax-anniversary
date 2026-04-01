@@ -257,8 +257,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
     end
 
     if event == "GUILDBANK_UPDATE_MONEY" or event == "GUILDBANKLOG_UPDATE" then
-        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
-        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+        -- Do NOT call QueryGuildBankLog here: it would trigger GUILDBANKLOG_UPDATE again, causing an infinite loop.
+        -- The data is already fresh when this event fires.
         scanGuildBankMoneyLog()
     end
 end)
