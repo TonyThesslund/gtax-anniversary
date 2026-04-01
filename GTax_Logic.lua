@@ -4,6 +4,131 @@
 local addonName, GTax = ...
 GTax = GTax or {}
 
+GTax.leaderboardCache = GTax.leaderboardCache or {}
+
+local function normalizePlayerName(name)
+    if type(name) ~= "string" then return "Unknown" end
+    local shortName = string.match(name, "^[^-]+") or name
+    if shortName == "" then return "Unknown" end
+    return shortName
+end
+
+local function parseNumber(value)
+    local n = tonumber(value)
+    if type(n) ~= "number" then return 0 end
+    if n < 0 then return 0 end
+    return math.floor(n)
+end
+
+function GTax.getLeaderboardSnapshot()
+    local entry = GTax.ensureDB()
+    local today, week, total = GTax.getDepositSums(entry)
+    return {
+        player = normalizePlayerName(UnitName("player") or "Unknown"),
+        total = total,
+        today = today,
+        week = week,
+        lastContributionAt = entry.lastResetAt or 0,
+    }
+end
+
+function GTax.updateLeaderboardEntry(player, total, today, week, lastContributionAt)
+    local key = normalizePlayerName(player)
+    GTax.leaderboardCache[key] = {
+        player = key,
+        total = parseNumber(total),
+        today = parseNumber(today),
+        week = parseNumber(week),
+        lastContributionAt = parseNumber(lastContributionAt),
+        updatedAt = time(),
+    }
+end
+
+function GTax.getLeaderboardEntries()
+    local entries = {}
+
+    local localSnapshot = GTax.getLeaderboardSnapshot()
+    GTax.updateLeaderboardEntry(
+        localSnapshot.player,
+        localSnapshot.total,
+        localSnapshot.today,
+        localSnapshot.week,
+        localSnapshot.lastContributionAt
+    )
+
+    for _, record in pairs(GTax.leaderboardCache) do
+        table.insert(entries, record)
+    end
+
+    table.sort(entries, function(a, b)
+        if a.total ~= b.total then return a.total > b.total end
+        if a.week ~= b.week then return a.week > b.week end
+        if a.today ~= b.today then return a.today > b.today end
+        if a.lastContributionAt ~= b.lastContributionAt then
+            return a.lastContributionAt > b.lastContributionAt
+        end
+        return string.lower(a.player) < string.lower(b.player)
+    end)
+
+    return entries
+end
+
+function GTax.sendLeaderboardRequest()
+    if not (IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
+    C_ChatInfo.SendAddonMessage("GTax", "SYNC|REQ", "GUILD")
+end
+
+function GTax.sendLeaderboardData()
+    if not (IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
+    local snapshot = GTax.getLeaderboardSnapshot()
+    GTax.updateLeaderboardEntry(snapshot.player, snapshot.total, snapshot.today, snapshot.week, snapshot.lastContributionAt)
+
+    local payload = table.concat({
+        "SYNC",
+        "DATA",
+        snapshot.player,
+        tostring(snapshot.total),
+        tostring(snapshot.today),
+        tostring(snapshot.week),
+        tostring(snapshot.lastContributionAt),
+    }, "|")
+    C_ChatInfo.SendAddonMessage("GTax", payload, "GUILD")
+
+    if GTax.UI and GTax.UI.UpdateLeaderboard then GTax.UI.UpdateLeaderboard() end
+end
+
+function GTax.handleSyncMessage(message, sender)
+    if type(message) ~= "string" then return false end
+    if string.sub(message, 1, 5) ~= "SYNC|" then return false end
+
+    local parts = {}
+    for token in string.gmatch(message, "([^|]+)") do
+        table.insert(parts, token)
+    end
+
+    local messageType = parts[2]
+    if messageType == "REQ" then
+        if normalizePlayerName(sender) ~= normalizePlayerName(UnitName("player") or "") then
+            GTax.sendLeaderboardData()
+        end
+        return true
+    end
+
+    if messageType == "DATA" then
+        GTax.updateLeaderboardEntry(
+            parts[3] or normalizePlayerName(sender),
+            parts[4],
+            parts[5],
+            parts[6],
+            parts[7]
+        )
+        if GTax.UI and GTax.UI.UpdateLeaderboard then GTax.UI.UpdateLeaderboard() end
+        return true
+    end
+
+    return false
+end
+
 function GTax.getSuggestedDeposit(money, pct)
     if type(money) ~= "number" or money <= 0 then return 0 end
     local rate = (pct or 3) / 100
@@ -145,6 +270,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
         entry.lastResetAt = time()
         entry.earnedSinceDeposit = 0
         if fingerprint then entry.lastDepositFingerprint = fingerprint end
+        if GTax.sendLeaderboardData then GTax.sendLeaderboardData() end
         -- Do NOT clear earningsHistory (today/week)
     elseif reason == "manual" then
         -- Manual reset: clear all earnings, but do NOT update lastResetAt or fingerprint

@@ -7,7 +7,7 @@ GTax = GTax or {}
 GTax.UI = GTax.UI or {}
 
 local function createLeftLabel(parent, previous, offsetY, text, template)
-    local label = parent:CreateFontString(nil, "OVERLAY", template or "GameFontNormal")
+    local label = parent:CreateFontString(nil, "OVERLAY", template or "GameFontNormalSmall")
     label:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, offsetY)
     label:SetJustifyH("LEFT")
     label:SetText(text)
@@ -39,14 +39,14 @@ function GTax.UI.UpdateWindow()
 
     -- Earned today/week text
     if not ui.earnedTodayText then
-        ui.earnedTodayText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        ui.earnedTodayText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         ui.earnedTodayText:SetJustifyH("LEFT")
     end
     ui.earnedTodayText:SetText("Earned today: " .. GTax.formatMoney(earnedToday))
     ui.earnedTodayText:SetShown(showEarnedToday)
 
     if not ui.earnedWeekText then
-        ui.earnedWeekText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        ui.earnedWeekText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         ui.earnedWeekText:SetJustifyH("LEFT")
     end
     ui.earnedWeekText:SetText("Earned this week: " .. GTax.formatMoney(earnedWeek))
@@ -100,7 +100,7 @@ function GTax.UI.UpdateWindow()
             end
         elseif el.visible and el.text then
             el.text:ClearAllPoints()
-            local spacing = (pendingGap and prev ~= ui.title) and -14 or -8
+            local spacing = (pendingGap and prev ~= ui.title) and -10 or -6
             el.text:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, spacing)
             prev = el.text
             visibleTextCount = visibleTextCount + 1
@@ -112,8 +112,8 @@ function GTax.UI.UpdateWindow()
     end
 
     -- Auto-resize window height
-    local height = 10 + 16 + 8 + (visibleTextCount * 22) + (gapCount * 6) + 10
-    ui.frame:SetSize(300, height)
+    local height = 8 + 14 + 6 + (visibleTextCount * 18) + (gapCount * 4) + 8
+    ui.frame:SetSize(270, height)
 end
 
 function GTax.UI.CreateWindow()
@@ -121,26 +121,25 @@ function GTax.UI.CreateWindow()
     if ui.frame then return end
 
     local win = CreateFrame("Frame", "GTaxWindow", UIParent)
-    win:SetSize(300, 175)
+    win:SetSize(270, 160)
     win:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 10, -10)
     win:SetMovable(true)
     win:EnableMouse(true)
     win:RegisterForDrag("LeftButton")
     win:SetScript("OnDragStart", function(self) self:StartMoving() end)
     win:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-
-    local title = win:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    title:SetPoint("TOPLEFT", win, "TOPLEFT", 12, -10)
+    local title = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    title:SetPoint("TOPLEFT", win, "TOPLEFT", 10, -9)
     title:SetJustifyH("LEFT")
     title:SetText("Guild Tax Tracker")
     ui.title = title
 
-    local earnedText = createLeftLabel(win, title, -8, "Earned since last contribution: 0g 0s 0c")
-    local lastDepositText = createLeftLabel(win, earnedText, -8, "Last contribution: Never")
-    local suggestText = createLeftLabel(win, lastDepositText, -8, "Suggested contribution at 3%: 0g 0s 0c")
-    local depositTodayText = createLeftLabel(win, suggestText, -14, "Contributed today: 0g 0s 0c")
-    local depositWeekText = createLeftLabel(win, depositTodayText, -8, "Contributed this week: 0g 0s 0c")
-    local depositTotalText = createLeftLabel(win, depositWeekText, -8, "Contributed total: 0g 0s 0c")
+    local earnedText = createLeftLabel(win, title, -6, "Earned since last contribution: 0g 0s 0c")
+    local lastDepositText = createLeftLabel(win, earnedText, -6, "Last contribution: Never")
+    local suggestText = createLeftLabel(win, lastDepositText, -6, "Suggested contribution at 3%: 0g 0s 0c")
+    local depositTodayText = createLeftLabel(win, suggestText, -10, "Contributed today: 0g 0s 0c")
+    local depositWeekText = createLeftLabel(win, depositTodayText, -6, "Contributed this week: 0g 0s 0c")
+    local depositTotalText = createLeftLabel(win, depositWeekText, -6, "Contributed total: 0g 0s 0c")
 
     ui.frame = win
     ui.earnedText = earnedText

@@ -138,6 +138,13 @@ local function initializeAddon()
 
     if GTax.UI and GTax.UI.CreateWindow then GTax.UI.CreateWindow() end
     if GTax.MinimapButton and GTax.MinimapButton.Create then GTax.MinimapButton.Create() end
+
+    -- Ask guild clients to publish their latest leaderboard data after login/reload.
+    if C_Timer and C_Timer.After and GTax.sendLeaderboardRequest then
+        C_Timer.After(2, function()
+            GTax.sendLeaderboardRequest()
+        end)
+    end
 end
 
 local prefixFrame = CreateFrame("Frame")
@@ -150,8 +157,11 @@ end)
 
 local addonMessageFrame = CreateFrame("Frame")
 addonMessageFrame:RegisterEvent("CHAT_MSG_ADDON")
-addonMessageFrame:SetScript("OnEvent", function(_, _, prefix, message, channel)
+addonMessageFrame:SetScript("OnEvent", function(_, _, prefix, message, channel, sender)
     if prefix == "GTax" and channel == "GUILD" then
+        if GTax.handleSyncMessage and GTax.handleSyncMessage(message, sender) then
+            return
+        end
         print(message)
     end
 end)
