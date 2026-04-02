@@ -14,12 +14,6 @@ GTax.pendingWithdrawalAmount = nil
 GTax.pendingWithdrawalExpiresAt = nil
 GTax.guildBankIsOpen = false
 
-local function normalizePlayerName(name)
-    if type(name) ~= "string" then return "" end
-    local shortName = string.match(name, "^[^-]+") or name
-    return string.lower(shortName)
-end
-
 local function registerAddonPrefix()
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
         C_ChatInfo.RegisterAddonMessagePrefix("GTax")
@@ -175,7 +169,7 @@ local function hookGuildBankFrame()
 
     GTax.uiGuildBankHooked = true
 
-    -- Hook deposit and withdrawal functions here, not on login,
+    -- Hook contribution and withdrawal functions here, not on login,
     -- because these are defined in Blizzard_GuildBankUI which loads lazily.
     if DepositGuildBankMoney then
         hooksecurefunc("DepositGuildBankMoney", flagPendingDeposit)
@@ -188,7 +182,6 @@ local function hookGuildBankFrame()
         GTax.guildBankIsOpen = true
         local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
         if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
-        scanGuildBankMoneyLog()
     end)
     GuildBankFrame:HookScript("OnHide", function()
         GTax.guildBankIsOpen = false
@@ -280,7 +273,6 @@ frame:SetScript("OnEvent", function(_, event, ...)
         GTax.guildBankIsOpen = true
         local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
         if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
-        scanGuildBankMoneyLog()
         return
     end
 
@@ -290,13 +282,13 @@ frame:SetScript("OnEvent", function(_, event, ...)
     end
 
     if event == "GUILDBANK_UPDATE_MONEY" then
-        -- Guild bank money changed. Confirm pending deposit or withdrawal.
+        -- Guild bank money changed. Confirm pending contribution or withdrawal.
         local entry = GTax.ensureDB()
         local hasPendingDeposit = GTax.pendingDeposit
             or (type(GTax.pendingDepositAmount) == "number" and GTax.pendingDepositAmount > 0
                 and (type(GTax.pendingDepositExpiresAt) ~= "number" or time() <= GTax.pendingDepositExpiresAt))
         if hasPendingDeposit then
-            local depositAmount = GTax.pendingDepositAmount
+            local contributionAmount = GTax.pendingDepositAmount
             GTax.pendingDeposit = false
             GTax.pendingDepositAmount = nil
             GTax.pendingDepositExpiresAt = nil
@@ -304,7 +296,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
                 GTax.pendingDepositTimer:Cancel()
             end
             GTax.pendingDepositTimer = nil
-            GTax.resetTracker("guild bank deposit", nil, depositAmount)
+            GTax.resetTracker("guild bank contribution", contributionAmount)
             return
         end
 

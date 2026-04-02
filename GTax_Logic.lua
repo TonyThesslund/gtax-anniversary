@@ -1,5 +1,5 @@
 -- GTax_Logic.lua
--- Pure logic: suggested deposit, time formatting, deposit sums, color, record/reset
+-- Pure logic: suggested contribution, time formatting, contribution sums, color, record/reset
 
 local addonName, GTax = ...
 GTax = GTax or {}
@@ -210,21 +210,6 @@ function GTax.getEarningsSums(entry)
     return today, week
 end
 
-function GTax.clearEarningsSince(entry, cutoffTimestamp)
-    if type(entry.earningsHistory) ~= "table" then
-        entry.earningsHistory = {}
-        return
-    end
-
-    local retainedHistory = {}
-    for _, record in ipairs(entry.earningsHistory) do
-        if (record.timestamp or 0) < cutoffTimestamp then
-            table.insert(retainedHistory, record)
-        end
-    end
-    entry.earningsHistory = retainedHistory
-end
-
 function GTax.getDepositColor(timestamp)
     if type(timestamp) ~= "number" or timestamp <= 0 then return 1, 0, 0 end
     local elapsed = time() - timestamp
@@ -242,13 +227,13 @@ function GTax.recordDeposit(entry, amount)
     end
 end
 
-function GTax.resetTracker(reason, fingerprint, depositAmount)
+function GTax.resetTracker(reason, depositAmount)
     local entry = GTax.ensureDB()
     local timeSince = GTax.formatTimeSinceDeposit(entry.lastResetAt)
     if type(entry.unpaidLoans) ~= "number" then entry.unpaidLoans = 0 end
     
     if depositAmount then
-        -- Guild bank deposit: apply to unpaid loans first if any
+        -- Guild bank contribution: apply to unpaid loans first if any
         local contributionAmount = depositAmount
         local loanPayment = 0
         
@@ -266,7 +251,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                 if loanPayment > 0 and contributionAmount > 0 then
                     local indent = string.rep(" ", 11)
                     local lines = {
-                        string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r deposited %s into the guild bank!",
+                        string.format("|cff5fd7ff[GTax]|r |cff00ff00%s|r contributed %s to the guild bank!",
                             name, GTax.formatMoney(depositAmount)),
                         indent .. "|cffffff00Loan paid off:|r " .. GTax.formatMoney(loanPayment),
                         indent .. "|cff00ff00Contribution:|r " .. GTax.formatMoney(contributionAmount),
@@ -279,7 +264,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
                     -- Loan payment only
                     local indent = string.rep(" ", 11)
                     local lines = {
-                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r deposited %s into the guild bank.",
+                        string.format("|cff5fd7ff[GTax]|r |cffffff00%s|r contributed %s to the guild bank.",
                             name, GTax.formatMoney(loanPayment)),
                         indent .. "|cffffff00Remaining loan:|r " .. GTax.formatMoney(entry.unpaidLoans),
                     }
@@ -327,7 +312,7 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
         
         local hasContribution = (depositAmount > loanPayment)
 
-        -- Record contribution for history (only when deposit exceeds loan payoff)
+        -- Record contribution for history (only when contribution exceeds loan payoff)
         if hasContribution then
             GTax.recordDeposit(entry, contributionAmount)
         end
@@ -336,11 +321,10 @@ function GTax.resetTracker(reason, fingerprint, depositAmount)
             entry.lastResetAt = time()
             entry.earnedSinceDeposit = 0
         end
-        if fingerprint then entry.lastDepositFingerprint = fingerprint end
         if GTax.sendLeaderboardData then GTax.sendLeaderboardData() end
         -- Do NOT clear earningsHistory (today/week)
     elseif reason == "manual" then
-        -- Manual reset: clear all earnings, but do NOT update lastResetAt or fingerprint
+        -- Manual reset: clear all earnings, but do NOT update lastResetAt
         entry.earnedSinceDeposit = 0
         entry.earningsHistory = {} -- clear earnings for today/week
     else

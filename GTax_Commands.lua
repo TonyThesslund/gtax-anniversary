@@ -14,7 +14,7 @@ local function handleSlash(msg)
         if GTax.UI and GTax.UI.ToggleOptions then GTax.UI.ToggleOptions() end
         return
     end
-    if command == "reset" or command == "deposit" then
+    if command == "reset" or command == "deposit" or command == "contribution" then
         GTax.resetTracker("manual")
         return
     end
@@ -25,16 +25,16 @@ local function handleSlash(msg)
         end
         local entry = GTax.ensureDB()
         local today, week, total = GTax.getDepositSums(entry)
-        local lastDeposit = GTax.formatTimeSinceDeposit(entry.lastResetAt)
+        local lastContribution = GTax.formatTimeSinceDeposit(entry.lastResetAt)
         local name = UnitName("player") or "Unknown"
-        -- Color the last deposit line
+        -- Color the last contribution line
         local r, g, b = GTax.getDepositColor(entry.lastResetAt)
         local hex = string.format("%02x%02x%02x", math.floor(r*255), math.floor(g*255), math.floor(b*255))
-        local lastDepositColored = "|cff" .. hex .. "Last Contribution: " .. lastDeposit .. "|r"
+        local lastContributionColored = "|cff" .. hex .. "Last Contribution: " .. lastContribution .. "|r"
         local indent = string.rep(" ", 11)
         local messages = {
             "|cff5fd7ff[GTax]|r Contribution audit for " .. name,
-            indent .. lastDepositColored,
+            indent .. lastContributionColored,
             indent .. "Contributed today: " .. GTax.formatMoney(today),
             indent .. "Contributed this week: " .. GTax.formatMoney(week),
             indent .. "Contributed total: " .. GTax.formatMoney(total),
@@ -50,7 +50,7 @@ local function handleSlash(msg)
         return
     end
     if command == "help" then
-        GTax.printMessage("Commands: /gtax, /gtax options, /gtax reset, /gtax audit, /gtax help")
+        GTax.printMessage("Commands: /gtax, /gtax options, /gtax reset, /gtax contribution, /gtax audit, /gtax help")
         return
     end
     GTax.printMessage("Unknown command. Use /gtax help.")

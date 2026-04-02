@@ -21,11 +21,6 @@ It focuses on three things:
 ### Options and leaderboard window
 - Movable options window that stays on top of normal UI windows.
 - Toggle visibility for tracker sections.
-- Reset controls:
-	- Reset since last
-	- Reset today
-	- Reset this week
-- Purge contribution history.
 - Adjustable tax slider (1% to 20%).
 - Guild leaderboard table with:
 	- Sortable columns
@@ -39,20 +34,19 @@ It focuses on three things:
 - On login/reload, the addon sends a sync request to guildmates.
 - Clients respond with current leaderboard data.
 - On detected contribution, your updated data is broadcast.
-- Sync payload shares: player, total, today, week, and last contribution timestamp.
+- Sync payload shares: player, total, today, week, last contribution timestamp, and unpaid loans.
 
-## Deposit detection behavior
+## Contribution detection behavior
 
 - GTax watches guild bank interactions and money changes to detect real contributions.
-- It now guards against false positives when opening guild bank logs by requiring a pending local deposit signal before triggering a contribution reset from log scan.
-- Deposit amount handling prefers the exact amount passed to `DepositGuildBankMoney` to avoid occasional delta-noise mismatches.
+- Contribution detection uses pending contribution/withdrawal flags and confirms on guild bank money update events.
+- Contribution amount handling prefers the exact amount passed to `DepositGuildBankMoney`.
 
 ## Slash commands
 
 - `/gtax` or `/gtax toggle`: Toggle main tracker window.
 - `/gtax options`: Open/close options and leaderboard window.
 - `/gtax reset`: Manual reset of earned tracking.
-- `/gtax purge`: Clear deposit history.
 - `/gtax audit`: Send your contribution summary to guild addon chat.
 - `/gtax help`: Show command help.
 

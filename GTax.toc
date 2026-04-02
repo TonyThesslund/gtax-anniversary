@@ -1,6 +1,6 @@
 ## Interface: 11506
 ## Title: GTax
-## Notes: Tracks money earned and % guild tax suggestion since your last deposit.
+## Notes: Tracks money earned and % guild tax suggestion since your last contribution.
 ## Author: Trony
 ## Version: 0.1.4
 ## SavedVariables: GTaxDB
