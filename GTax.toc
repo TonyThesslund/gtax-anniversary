@@ -2,7 +2,7 @@
 ## Title: GTax
 ## Notes: Tracks money earned and % guild tax suggestion since your last contribution.
 ## Author: Trony
-## Version: 0.1.4
+## Version: 0.1.5
 ## SavedVariables: GTaxDB
 
 GTax_Core.lua
