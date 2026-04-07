@@ -17,15 +17,7 @@ function GTax.formatMoney(money)
     local goldIcon = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t"
     local silverIcon = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t"
     local copperIcon = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
-    local str = ""
-    if gold > 0 then
-        str = str .. gold .. goldIcon .. " "
-    end
-    if silver > 0 or (gold > 0 and copper > 0) then
-        str = str .. silver .. silverIcon .. " "
-    end
-    str = str .. copper .. copperIcon
-    return str
+    return string.format("%d%s %d%s %d%s", gold, goldIcon, silver, silverIcon, copper, copperIcon)
 end
 
 function GTax.getCharacterKey()

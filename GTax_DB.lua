@@ -6,12 +6,12 @@ GTax = GTax or {}
 
 GTax.defaults = {
     earnedSinceDeposit = 0,
-    earnedToday = 0,
-    earnedWeek = 0,
+    earningsHistory = {},
     lastKnownMoney = nil,
     lastResetAt = 0,
-    lastDepositFingerprint = nil,
     depositHistory = {},
+    unpaidLoans = 0,
+    leaderboardCache = {}, -- Persisted guild leaderboard data from other players
     taxPercent = 3,
     minimapAngle = 220,
     showMinimap = true,
@@ -42,7 +42,12 @@ function GTax.ensureDB()
     local entry = GTaxDB.characters[characterKey]
     for k, v in pairs(GTax.defaults) do
         if entry[k] == nil then
-            entry[k] = v
+            -- Always assign a fresh table copy to avoid aliasing the shared defaults reference
+            if type(v) == "table" then
+                entry[k] = {}
+            else
+                entry[k] = v
+            end
         end
     end
     -- Ensure all show options are present and correct
