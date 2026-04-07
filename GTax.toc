@@ -2,9 +2,8 @@
 ## Title: GTax
 ## Notes: Tracks money earned and % guild tax suggestion since your last contribution.
 ## Author: Trony
-## Version: 0.2.1
+## Version: 0.2.0
 ## SavedVariables: GTaxDB
-## OptionalDeps: Ace3
 
 src\Addon\Core.lua
 src\Data\Database.lua
@@ -12,5 +11,5 @@ src\Tracking\TaxLogic.lua
 src\Runtime\EventRouter.lua
 src\Runtime\SlashCommands.lua
 src\UI\Windows\MainWindow.lua
+src\UI\Windows\OptionsWindow.lua
 src\UI\MinimapButton.lua
-src\UI\AceOptions.lua

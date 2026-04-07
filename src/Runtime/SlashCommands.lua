@@ -14,20 +14,12 @@ local function handleSlash(msg)
         if GTax.UI and GTax.UI.ToggleOptions then GTax.UI.ToggleOptions() end
         return
     end
-    if command == "leaderboard" or command == "lb" then
-        if GTax.UI and GTax.UI.ShowAceLeaderboard then
-            GTax.UI.ShowAceLeaderboard()
-        else
-            GTax.printMessage("Leaderboard UI unavailable.")
-        end
-        return
-    end
     if command == "reset" or command == "deposit" or command == "contribution" then
         GTax.resetTracker("manual")
         return
     end
     if command == "audit" then
-        if not (IsInGuild and IsInGuild()) then
+        if not (IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage) then
             GTax.printMessage("You are not in a guild.")
             return
         end
@@ -49,7 +41,7 @@ local function handleSlash(msg)
         }
         local function sendNext(i)
             if i > #messages then return end
-            GTax.sendGuildLine(messages[i])
+            C_ChatInfo.SendAddonMessage("GTax", messages[i], "GUILD")
             if i < #messages then
                 sendNext(i+1)
             end
@@ -58,7 +50,7 @@ local function handleSlash(msg)
         return
     end
     if command == "help" then
-        GTax.printMessage("Commands: /gtax, /gtax options, /gtax leaderboard, /gtax reset, /gtax contribution, /gtax audit, /gtax help")
+        GTax.printMessage("Commands: /gtax, /gtax options, /gtax reset, /gtax contribution, /gtax audit, /gtax help")
         return
     end
     GTax.printMessage("Unknown command. Use /gtax help.")

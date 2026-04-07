@@ -90,55 +90,40 @@ function GTax.getLeaderboardEntries()
 end
 
 function GTax.sendLeaderboardRequest()
-    GTax.sendCommPayload({ kind = "SYNC", messageType = "REQ" }, "GUILD")
+    if not (IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
+    C_ChatInfo.SendAddonMessage("GTax", "SYNC|REQ", "GUILD")
 end
 
 function GTax.sendLeaderboardData()
+    if not (IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
     local snapshot = GTax.getLeaderboardSnapshot()
     GTax.updateLeaderboardEntry(snapshot.player, snapshot.total, snapshot.today, snapshot.week, snapshot.lastContributionAt, snapshot.unpaidLoans)
 
-    GTax.sendCommPayload({
-        kind = "SYNC",
-        messageType = "DATA",
-        player = snapshot.player,
-        total = snapshot.total,
-        today = snapshot.today,
-        week = snapshot.week,
-        lastContributionAt = snapshot.lastContributionAt,
-        unpaidLoans = snapshot.unpaidLoans,
-    }, "GUILD")
+    local payload = table.concat({
+        "SYNC",
+        "DATA",
+        snapshot.player,
+        tostring(snapshot.total),
+        tostring(snapshot.today),
+        tostring(snapshot.week),
+        tostring(snapshot.lastContributionAt),
+        tostring(snapshot.unpaidLoans),
+    }, "|")
+    C_ChatInfo.SendAddonMessage("GTax", payload, "GUILD")
 
     if GTax.UI and GTax.UI.UpdateLeaderboard then GTax.UI.UpdateLeaderboard() end
 end
 
 function GTax.handleSyncMessage(message, sender)
-    local payload
+    if type(message) ~= "string" then return false end
+    if string.sub(message, 1, 5) ~= "SYNC|" then return false end
 
-    if type(message) == "table" then
-        payload = message
-    elseif type(message) == "string" then
-        if string.sub(message, 1, 5) ~= "SYNC|" then return false end
-        local parts = {}
-        for token in string.gmatch(message, "([^|]+)") do
-            table.insert(parts, token)
-        end
-        payload = {
-            kind = "SYNC",
-            messageType = parts[2],
-            player = parts[3],
-            total = parts[4],
-            today = parts[5],
-            week = parts[6],
-            lastContributionAt = parts[7],
-            unpaidLoans = parts[8],
-        }
-    else
-        return false
+    local parts = {}
+    for token in string.gmatch(message, "([^|]+)") do
+        table.insert(parts, token)
     end
 
-    if payload.kind ~= "SYNC" then return false end
-
-    local messageType = payload.messageType
+    local messageType = parts[2]
     if messageType == "REQ" then
         if normalizePlayerName(sender) ~= normalizePlayerName(UnitName("player") or "") then
             GTax.sendLeaderboardData()
@@ -148,12 +133,12 @@ function GTax.handleSyncMessage(message, sender)
 
     if messageType == "DATA" then
         GTax.updateLeaderboardEntry(
-            payload.player or normalizePlayerName(sender),
-            payload.total,
-            payload.today,
-            payload.week,
-            payload.lastContributionAt,
-            payload.unpaidLoans
+            parts[3] or normalizePlayerName(sender),
+            parts[4],
+            parts[5],
+            parts[6],
+            parts[7],
+            parts[8]
         )
         if GTax.UI and GTax.UI.UpdateLeaderboard then GTax.UI.UpdateLeaderboard() end
         return true
@@ -260,7 +245,7 @@ function GTax.resetTracker(reason, depositAmount)
         
         -- Send broadcast message (either loan payment, contribution, or both)
         if loanPayment > 0 or contributionAmount > 0 then
-            if IsInGuild and IsInGuild() then
+            if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
                 local name = UnitName("player") or "Unknown"
                 
                 if loanPayment > 0 and contributionAmount > 0 then
@@ -272,7 +257,9 @@ function GTax.resetTracker(reason, depositAmount)
                         indent .. "|cff00ff00Contribution:|r " .. GTax.formatMoney(contributionAmount),
                         indent .. "|cffffff00Remaining loan:|r " .. GTax.formatMoney(entry.unpaidLoans),
                     }
-                    for i, line in ipairs(lines) do GTax.sendGuildLine(line) end
+                    for i, line in ipairs(lines) do
+                        C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                    end
                 elseif loanPayment > 0 then
                     -- Loan payment only
                     local indent = string.rep(" ", 11)
@@ -281,7 +268,9 @@ function GTax.resetTracker(reason, depositAmount)
                             name, GTax.formatMoney(loanPayment)),
                         indent .. "|cffffff00Remaining loan:|r " .. GTax.formatMoney(entry.unpaidLoans),
                     }
-                    for i, line in ipairs(lines) do GTax.sendGuildLine(line) end
+                    for i, line in ipairs(lines) do
+                        C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                    end
                 else
                     -- Pure contribution (no loan payment)
                     local showSuggested = true
@@ -303,7 +292,9 @@ function GTax.resetTracker(reason, depositAmount)
                             indent .. "|cff00ff00Suggested:|r " .. GTax.formatMoney(suggested) .. ", at " .. pct .. "%",
                             indent .. "|cff00ff00Previous contribution was|r " .. timeSince .. ".",
                         }
-                        for i, line in ipairs(lines) do GTax.sendGuildLine(line) end
+                        for i, line in ipairs(lines) do
+                            C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                        end
                     else
                         local indent = string.rep(" ", 11)
                         local lines = {
@@ -311,7 +302,9 @@ function GTax.resetTracker(reason, depositAmount)
                             indent .. "|cff00ff00Amount:|r " .. GTax.formatMoney(contributionAmount),
                             indent .. "|cff00ff00Previous contribution was|r " .. timeSince .. ".",
                         }
-                        for i, line in ipairs(lines) do GTax.sendGuildLine(line) end
+                        for i, line in ipairs(lines) do
+                            C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
+                        end
                     end
                 end
             end
