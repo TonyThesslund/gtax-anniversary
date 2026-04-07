@@ -2,6 +2,28 @@
 
 GTax is a World of Warcraft Anniversary addon for tracking personal guild-tax activity and sharing contribution stats with guildmates who also run GTax.
 
+## Source layout
+
+```text
+src/
+	Addon/
+		Core.lua
+	Data/
+		Database.lua
+	Tracking/
+		TaxLogic.lua
+	Runtime/
+		EventRouter.lua
+		SlashCommands.lua
+	UI/
+		MinimapButton.lua
+		Windows/
+			MainWindow.lua
+			OptionsWindow.lua
+```
+
+Load order is defined in `GTax.toc` and is intentionally kept stable to preserve runtime behavior.
+
 It focuses on three things:
 
 1. Tracking how much gold you have earned since your last guild bank contribution.
