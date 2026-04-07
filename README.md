@@ -2,6 +2,12 @@
 
 GTax is a World of Warcraft Anniversary addon for tracking personal guild-tax activity and sharing contribution stats with guildmates who also run GTax.
 
+## Dependencies
+
+- Ace3 (required): AceAddon-3.0, AceDB-3.0, AceEvent-3.0, AceComm-3.0, AceSerializer-3.0, AceConfig-3.0, AceConfigDialog-3.0, AceGUI-3.0
+
+The addon currently uses Ace3 for database, event routing, communications, options (AceConfig), and leaderboard window rendering (AceGUI).
+
 ## Source layout
 
 ```text
@@ -16,10 +22,10 @@ src/
 		EventRouter.lua
 		SlashCommands.lua
 	UI/
+		AceOptions.lua
 		MinimapButton.lua
 		Windows/
 			MainWindow.lua
-			OptionsWindow.lua
 ```
 
 Load order is defined in `GTax.toc` and is intentionally kept stable to preserve runtime behavior.
@@ -40,16 +46,11 @@ It focuses on three things:
 - Shows contributed today, this week, and total.
 - Shows time since last contribution with age-based color.
 
-### Options and leaderboard window
-- Movable options window that stays on top of normal UI windows.
+### Options and leaderboard UI
+- AceConfig options panel for tracker and tax settings.
+- AceGUI leaderboard window for guild contribution overview.
 - Toggle visibility for tracker sections.
 - Adjustable tax slider (1% to 20%).
-- Guild leaderboard table with:
-	- Sortable columns
-	- Header highlight for active sort column
-	- Zebra striping
-	- Scroll support for larger guild rosters
-	- Dynamic title: `<Guild Name> Guild Leaderboard`
 
 ### Guild sync
 - Uses addon prefix `GTax` on the `GUILD` addon channel.

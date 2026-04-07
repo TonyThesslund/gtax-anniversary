@@ -6,6 +6,19 @@ GTax = GTax or {}
 
 GTax.MinimapButton = GTax.MinimapButton or {}
 
+function GTax.MinimapButton.SetVisible(visible)
+    local entry = GTax.ensureDB()
+    entry.showMinimap = visible and true or false
+    if GTax.MinimapButton.button then
+        if entry.showMinimap then
+            GTax.MinimapButton.button:Show()
+            GTax.MinimapButton.UpdatePosition()
+        else
+            GTax.MinimapButton.button:Hide()
+        end
+    end
+end
+
 function GTax.MinimapButton.UpdatePosition()
     local entry = GTax.ensureDB()
     local angle = math.rad(entry.minimapAngle or 220)
@@ -66,5 +79,5 @@ function GTax.MinimapButton.Create()
     GTax.MinimapButton.button = btn
     GTax.MinimapButton.UpdatePosition()
     local entry = GTax.ensureDB()
-    if entry.showMinimap == false then btn:Hide() end
+    GTax.MinimapButton.SetVisible(entry.showMinimap ~= false)
 end

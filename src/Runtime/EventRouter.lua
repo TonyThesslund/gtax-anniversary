@@ -545,16 +545,14 @@ local function applyConfirmedWithdrawal(entry, amount)
 
     entry.unpaidLoans = entry.unpaidLoans + amount
 
-    if IsInGuild and IsInGuild() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
+    if IsInGuild and IsInGuild() then
         local name = UnitName("player") or "Unknown"
         local indent = string.rep(" ", 11)
         local lines = {
             string.format("|cff5fd7ff[GTax]|r |cffffa500%s|r withdrew %s from guild bank.", name, GTax.formatMoney(amount)),
             indent .. "|cffffa500Total loans:|r " .. GTax.formatMoney(entry.unpaidLoans),
         }
-        for i, line in ipairs(lines) do
-            C_ChatInfo.SendAddonMessage("GTax", line, "GUILD")
-        end
+        for i, line in ipairs(lines) do GTax.sendGuildLine(line) end
     end
 
     if GTax.sendLeaderboardData then GTax.sendLeaderboardData() end
@@ -648,7 +646,7 @@ local function hookGuildBankFrame()
 end
 
 local function initializeAddon()
-    local entry = GTax.ensureDB()
+    local entry = GTax.initDB and GTax.initDB() or GTax.ensureDB()
     entry.lastKnownMoney = entry.lastKnownMoney or (GetMoney() or 0)
 
     if GTax.UI and GTax.UI.CreateWindow then GTax.UI.CreateWindow() end
@@ -664,119 +662,122 @@ local function initializeAddon()
     end
 end
 
-local prefixFrame = CreateFrame("Frame")
-prefixFrame:RegisterEvent("ADDON_LOADED")
-prefixFrame:SetScript("OnEvent", function(_, _, addon)
+function GTax:OnInitialize()
+    GTax.initDB()
+    registerAddonPrefix()
+end
+
+function GTax:OnEnable()
+    GTax:RegisterComm(GTax.commPrefix)
+    GTax:RegisterEvent("PLAYER_LOGIN")
+    GTax:RegisterEvent("ADDON_LOADED")
+    GTax:RegisterEvent("PLAYER_MONEY")
+    GTax:RegisterEvent("GUILDBANKFRAME_OPENED")
+    GTax:RegisterEvent("GUILDBANKFRAME_CLOSED")
+    GTax:RegisterEvent("GUILDBANKLOG_UPDATE")
+    GTax:RegisterEvent("GUILDBANK_UPDATE_MONEY")
+end
+
+function GTax:OnCommReceived(prefix, message, channel, sender)
+    if prefix ~= GTax.commPrefix then return end
+
+    local serializer = LibStub("AceSerializer-3.0", true)
+    if not serializer then return end
+
+    local ok, payload = serializer:Deserialize(message)
+    if ok then
+        if type(payload) == "table" and payload.kind == "CHAT" then
+            if type(payload.text) == "string" then print(payload.text) end
+            return
+        end
+        if GTax.handleSyncMessage and GTax.handleSyncMessage(payload, sender) then
+            return
+        end
+        return
+    end
+
+    -- Legacy compatibility for pre-AceComm messages.
+    if GTax.handleSyncMessage and GTax.handleSyncMessage(message, sender) then
+        return
+    end
+    print(message)
+end
+
+function GTax:PLAYER_LOGIN()
+    initializeAddon()
+end
+
+function GTax:ADDON_LOADED(_, addon)
     if addon == "GTax" then
         registerAddonPrefix()
+        return
     end
-end)
+    if addon == "Blizzard_GuildBankUI" then
+        hookGuildBankFrame()
+        return
+    end
+    if addon == "Baganator" then
+        hookGuildBankContributionPopup()
+        return
+    end
+    if addon == "BagBrother" or addon == "Bagnon" then
+        hookGuildBankContributionPopup()
+    end
+end
 
-local addonMessageFrame = CreateFrame("Frame")
-addonMessageFrame:RegisterEvent("CHAT_MSG_ADDON")
-addonMessageFrame:SetScript("OnEvent", function(_, _, prefix, message, channel, sender)
-    if prefix == "GTax" and channel == "GUILD" then
-        if GTax.handleSyncMessage and GTax.handleSyncMessage(message, sender) then
-            return
+function GTax:PLAYER_MONEY()
+    onPlayerMoneyChanged()
+end
+
+function GTax:GUILDBANKFRAME_OPENED()
+    GTax.guildBankIsOpen = true
+    local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
+    if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
+    updateVisibleAddonMoneyDialogs()
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0, updateVisibleAddonMoneyDialogs)
+        C_Timer.After(0.2, updateVisibleAddonMoneyDialogs)
+    end
+end
+
+function GTax:GUILDBANKFRAME_CLOSED()
+    GTax.guildBankIsOpen = false
+end
+
+function GTax:GUILDBANK_UPDATE_MONEY()
+    local entry = GTax.ensureDB()
+    local hasPendingDeposit = GTax.pendingDeposit
+        or (type(GTax.pendingDepositAmount) == "number" and GTax.pendingDepositAmount > 0
+            and (type(GTax.pendingDepositExpiresAt) ~= "number" or time() <= GTax.pendingDepositExpiresAt))
+    if hasPendingDeposit then
+        local contributionAmount = GTax.pendingDepositAmount
+        GTax.pendingDeposit = false
+        GTax.pendingDepositAmount = nil
+        GTax.pendingDepositExpiresAt = nil
+        if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
+            GTax.pendingDepositTimer:Cancel()
         end
-        print(message)
-    end
-end)
-
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("ADDON_LOADED")
-frame:RegisterEvent("PLAYER_MONEY")
-frame:RegisterEvent("GUILDBANKFRAME_OPENED")
-frame:RegisterEvent("GUILDBANKFRAME_CLOSED")
-frame:RegisterEvent("GUILDBANKLOG_UPDATE")
-frame:RegisterEvent("GUILDBANK_UPDATE_MONEY")
-
-frame:SetScript("OnEvent", function(_, event, ...)
-    if event == "PLAYER_LOGIN" then
-        initializeAddon()
+        GTax.pendingDepositTimer = nil
+        GTax.resetTracker("guild bank contribution", contributionAmount)
         return
     end
 
-    if event == "ADDON_LOADED" then
-        local addon = ...
-        if addon == "GTax" then
-            registerAddonPrefix()
-            return
+    local hasPendingWithdrawal = GTax.pendingWithdrawal
+        or (type(GTax.pendingWithdrawalAmount) == "number" and GTax.pendingWithdrawalAmount > 0
+            and (type(GTax.pendingWithdrawalExpiresAt) ~= "number" or time() <= GTax.pendingWithdrawalExpiresAt))
+    if hasPendingWithdrawal then
+        local withdrawalAmount = GTax.pendingWithdrawalAmount
+        GTax.pendingWithdrawal = false
+        GTax.pendingWithdrawalAmount = nil
+        GTax.pendingWithdrawalExpiresAt = nil
+        if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
+            GTax.pendingWithdrawalTimer:Cancel()
         end
-        if addon == "Blizzard_GuildBankUI" then
-            hookGuildBankFrame()
-            return
-        end
-        if addon == "Baganator" then
-            hookGuildBankContributionPopup()
-            return
-        end
-        if addon == "BagBrother" or addon == "Bagnon" then
-            hookGuildBankContributionPopup()
-        end
-        return
+        GTax.pendingWithdrawalTimer = nil
+        applyConfirmedWithdrawal(entry, withdrawalAmount)
     end
+end
 
-    if event == "PLAYER_MONEY" then
-        onPlayerMoneyChanged()
-        return
-    end
-
-    if event == "GUILDBANKFRAME_OPENED" then
-        GTax.guildBankIsOpen = true
-        local moneyTab = (MAX_GUILDBANK_TABS or 6) + 1
-        if QueryGuildBankLog then QueryGuildBankLog(moneyTab) end
-        updateVisibleAddonMoneyDialogs()
-        if C_Timer and C_Timer.After then
-            C_Timer.After(0, updateVisibleAddonMoneyDialogs)
-            C_Timer.After(0.2, updateVisibleAddonMoneyDialogs)
-        end
-        return
-    end
-
-    if event == "GUILDBANKFRAME_CLOSED" then
-        GTax.guildBankIsOpen = false
-        return
-    end
-
-    if event == "GUILDBANK_UPDATE_MONEY" then
-        -- Guild bank money changed. Confirm pending contribution or withdrawal.
-        local entry = GTax.ensureDB()
-        local hasPendingDeposit = GTax.pendingDeposit
-            or (type(GTax.pendingDepositAmount) == "number" and GTax.pendingDepositAmount > 0
-                and (type(GTax.pendingDepositExpiresAt) ~= "number" or time() <= GTax.pendingDepositExpiresAt))
-        if hasPendingDeposit then
-            local contributionAmount = GTax.pendingDepositAmount
-            GTax.pendingDeposit = false
-            GTax.pendingDepositAmount = nil
-            GTax.pendingDepositExpiresAt = nil
-            if GTax.pendingDepositTimer and GTax.pendingDepositTimer.Cancel then
-                GTax.pendingDepositTimer:Cancel()
-            end
-            GTax.pendingDepositTimer = nil
-            GTax.resetTracker("guild bank contribution", contributionAmount)
-            return
-        end
-
-        local hasPendingWithdrawal = GTax.pendingWithdrawal
-            or (type(GTax.pendingWithdrawalAmount) == "number" and GTax.pendingWithdrawalAmount > 0
-                and (type(GTax.pendingWithdrawalExpiresAt) ~= "number" or time() <= GTax.pendingWithdrawalExpiresAt))
-        if hasPendingWithdrawal then
-            local withdrawalAmount = GTax.pendingWithdrawalAmount
-            GTax.pendingWithdrawal = false
-            GTax.pendingWithdrawalAmount = nil
-            GTax.pendingWithdrawalExpiresAt = nil
-            if GTax.pendingWithdrawalTimer and GTax.pendingWithdrawalTimer.Cancel then
-                GTax.pendingWithdrawalTimer:Cancel()
-            end
-            GTax.pendingWithdrawalTimer = nil
-            applyConfirmedWithdrawal(entry, withdrawalAmount)
-        end
-        return
-    end
-
-    if event == "GUILDBANKLOG_UPDATE" then
-        return -- no longer used
-    end
-end)
+function GTax:GUILDBANKLOG_UPDATE()
+    return
+end
