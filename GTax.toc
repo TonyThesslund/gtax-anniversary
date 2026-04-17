@@ -8,6 +8,14 @@
 src\Addon\Core.lua
 src\Data\Database.lua
 src\Tracking\TaxLogic.lua
+src\Runtime\AddonComm.lua
+src\Runtime\MoneyDialogs.lua
+src\Runtime\MoneyDialogs\Shared.lua
+src\Runtime\MoneyDialogs\Layout.lua
+src\Runtime\MoneyDialogs\Integrations\Baganator.lua
+src\Runtime\MoneyDialogs\Integrations\Bagnon.lua
+src\Runtime\MoneyDialogs\Hooks.lua
+src\Runtime\GuildBankTracker.lua
 src\Runtime\EventRouter.lua
 src\Runtime\SlashCommands.lua
 src\UI\Windows\MainWindow.lua
